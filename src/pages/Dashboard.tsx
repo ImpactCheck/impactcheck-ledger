@@ -17,7 +17,7 @@ const REGION_LABELS: Record<string, string> = {
   virginia_pjm: "Virginia (PJM)",
   iowa_miso: "Iowa (MISO)",
   iceland_geo: "Iceland (Geo)",
-  singapore: "Singapore",
+  singapore: "Singapore"
 };
 
 export default function Dashboard() {
@@ -50,7 +50,7 @@ export default function Dashboard() {
       primaryRegion: proj.primaryRegion,
       comparisonRegions: proj.comparisonRegions ?? [],
       regions: [proj.primaryRegion, ...(proj.comparisonRegions ?? [])],
-      baselineFootprintKgCO2e: proj.baselineFootprintKgCO2e,
+      baselineFootprintKgCO2e: proj.baselineFootprintKgCO2e
     });
     navigate("/setup");
   };
@@ -64,13 +64,13 @@ export default function Dashboard() {
       primaryRegion: "",
       comparisonRegions: [],
       regions: [],
-      baselineFootprintKgCO2e: undefined,
+      baselineFootprintKgCO2e: undefined
     });
     navigate("/setup");
   };
 
-  const aiInfraCount = projects.filter(p => p.companyType === "ai_infra").length;
-  const regionCount = new Set(projects.flatMap(p => [p.primaryRegion, ...(p.comparisonRegions ?? [])])).size;
+  const aiInfraCount = projects.filter((p) => p.companyType === "ai_infra").length;
+  const regionCount = new Set(projects.flatMap((p) => [p.primaryRegion, ...(p.comparisonRegions ?? [])])).size;
 
   return (
     <div className="min-h-screen bg-background">
@@ -89,13 +89,13 @@ export default function Dashboard() {
           <button
             onClick={toggleTheme}
             className="h-10 w-10 rounded-2xl border border-border bg-card flex items-center justify-center hover:bg-muted transition-colors"
-            aria-label="Toggle theme"
-          >
-            {theme === "dark" ? (
-              <Sun className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <Moon className="h-4 w-4 text-muted-foreground" />
-            )}
+            aria-label="Toggle theme">
+
+            {theme === "dark" ?
+            <Sun className="h-4 w-4 text-muted-foreground" /> :
+
+            <Moon className="h-4 w-4 text-muted-foreground" />
+            }
           </button>
         </div>
       </header>
@@ -104,7 +104,7 @@ export default function Dashboard() {
         {/* Page header */}
         <div className="flex items-end justify-between mb-10">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Welcome back!</h1>
             <p className="text-muted-foreground mt-1">
               Manage your carbon audit projects and track sustainability progress.
             </p>
@@ -174,12 +174,12 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {projects.map((proj) => (
-            <Card
-              key={proj.id}
-              className="card-elevated border-0 cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all group rounded-3xl"
-              onClick={() => openProject(proj)}
-            >
+          {projects.map((proj) =>
+          <Card
+            key={proj.id}
+            className="card-elevated border-0 cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all group rounded-3xl"
+            onClick={() => openProject(proj)}>
+
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1 min-w-0">
@@ -201,10 +201,10 @@ export default function Dashboard() {
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <button
-                          onClick={(e) => e.stopPropagation()}
-                          className="h-8 w-8 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
-                          aria-label="Delete project"
-                        >
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-8 w-8 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
+                        aria-label="Delete project">
+
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </AlertDialogTrigger>
@@ -218,9 +218,9 @@ export default function Dashboard() {
                         <AlertDialogFooter>
                           <AlertDialogCancel className="rounded-2xl">Cancel</AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={(e) => handleDelete(e, proj.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-2xl"
-                          >
+                          onClick={(e) => handleDelete(e, proj.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-2xl">
+
                             Delete
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -239,21 +239,21 @@ export default function Dashboard() {
                       {proj.companyType === "ai_infra" ? "AI Infrastructure" : "Enterprise"}
                     </span>
                   </span>
-                  {proj.baselineFootprintKgCO2e && (
-                    <span className="text-xs text-muted-foreground font-mono ml-auto">
+                  {proj.baselineFootprintKgCO2e &&
+                <span className="text-xs text-muted-foreground font-mono ml-auto">
                       {formatTonnes(proj.baselineFootprintKgCO2e)}t
                     </span>
-                  )}
+                }
                 </div>
               </CardContent>
             </Card>
-          ))}
+          )}
 
           {/* New project card */}
           <Card
             className="border-2 border-dashed border-border hover:border-primary/30 cursor-pointer transition-all flex items-center justify-center min-h-[180px] rounded-3xl group"
-            onClick={handleNewProject}
-          >
+            onClick={handleNewProject}>
+
             <CardContent className="text-center py-8">
               <div className="h-14 w-14 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/15 transition-colors">
                 <Plus className="h-6 w-6 text-primary" />
@@ -264,6 +264,6 @@ export default function Dashboard() {
           </Card>
         </div>
       </main>
-    </div>
-  );
+    </div>);
+
 }
