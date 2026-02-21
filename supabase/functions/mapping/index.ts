@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const DATA_VERSION = "^21";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -14,7 +16,6 @@ serve(async (req) => {
     if (!projectId) throw new Error("projectId required");
 
     const CLIMATIQ_API_KEY = Deno.env.get("CLIMATIQ_API_KEY");
-    if (!CLIMATIQ_API_KEY) throw new Error("CLIMATIQ_API_KEY not configured");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -24,7 +25,7 @@ serve(async (req) => {
     // Create job
     const { data: job, error: jobErr } = await supabase
       .from("jobs")
-      .insert({ project_id: projectId, type: "mapping", status: "running", progress: 10, stage: "initializing" })
+      .insert({ project_id: projectId, type: "mapping", status: "running", progress: 5, stage: "loading_activities" })
       .select()
       .single();
     if (jobErr) throw jobErr;
@@ -44,194 +45,103 @@ serve(async (req) => {
 
     // Get project for region info
     const { data: proj } = await supabase.from("projects").select("primary_region").eq("id", projectId).single();
-    const climatiqRegion = mapRegionToClimatiq(proj?.primary_region || "");
+    const projectRegion = mapRegionToClimatiq(proj?.primary_region || "");
 
-    await supabase.from("jobs").update({ progress: 20, stage: "searching emission factors" }).eq("id", job.id);
+    await supabase.from("jobs").update({ progress: 10, stage: "searching_factors" }).eq("id", job.id);
 
     // Delete old estimates
     await supabase.from("estimates").delete().eq("project_id", projectId);
 
     const estimates: any[] = [];
     const total = activities.length;
+    const useStub = !CLIMATIQ_API_KEY;
 
     for (let i = 0; i < total; i++) {
       const act = activities[i];
-      const progress = 20 + Math.floor((i / total) * 65);
-      await supabase.from("jobs").update({ progress, stage: `Mapping ${i + 1}/${total}: ${act.search_query || act.text}` }).eq("id", job.id);
+      const progress = 10 + Math.floor((i / total) * 75);
+      const searchQuery = act.search_query || act.text;
+      const region = act.region ? mapRegionToClimatiq(act.region) : projectRegion;
+
+      await supabase.from("jobs").update({
+        progress,
+        stage: i < total / 2 ? "searching_factors" : "estimating",
+      }).eq("id", job.id);
 
       try {
-        // Step 1: Search Climatiq for matching emission factors using search_query
-        const searchQuery = act.search_query || act.text;
-        const searchParams = new URLSearchParams({
-          query: searchQuery,
-          results_per_page: "5",
-        });
-
-        // Add unit_type filter if available
-        if (act.unit_type) {
-          searchParams.set("unit_type", act.unit_type);
-        }
-
-        // Add region filter
-        if (climatiqRegion && climatiqRegion !== "GLOBAL") {
-          searchParams.set("region", climatiqRegion);
-        }
-
-        const searchResp = await fetch(
-          `https://api.climatiq.io/search?${searchParams.toString()}`,
-          { headers: { Authorization: `Bearer ${CLIMATIQ_API_KEY}` } }
-        );
-
-        if (!searchResp.ok) {
-          const errText = await searchResp.text();
-          console.error(`Search failed for "${searchQuery}":`, errText);
-          estimates.push(fallbackEstimate(projectId, act, null));
+        if (useStub) {
+          // ── Deterministic stub mode ──
+          const stubResult = stubEstimate(act, searchQuery);
+          estimates.push({
+            project_id: projectId,
+            activity_id: act.id,
+            region: act.region,
+            matched_factor: stubResult.matched_factor,
+            confidence: stubResult.confidence,
+            co2e_kg: stubResult.co2e_kg,
+            input_used: { unit_type: act.unit_type, quantity: act.quantity, amount: act.amount, currency: act.currency },
+          });
           continue;
         }
 
-        const searchData = await searchResp.json();
-        const factors = searchData.results || [];
+        // ── Step 1: Search for emission factors ──
+        const searchResult = await searchFactors(CLIMATIQ_API_KEY!, searchQuery, region, act.unit_type);
 
-        if (factors.length === 0) {
-          // Retry without region filter
-          const retryParams = new URLSearchParams({
-            query: searchQuery,
-            results_per_page: "5",
-          });
-          if (act.unit_type) retryParams.set("unit_type", act.unit_type);
-
-          const retrySearchResp = await fetch(
-            `https://api.climatiq.io/search?${retryParams.toString()}`,
-            { headers: { Authorization: `Bearer ${CLIMATIQ_API_KEY}` } }
-          );
-
-          if (retrySearchResp.ok) {
-            const retryData = await retrySearchResp.json();
-            if (retryData.results?.length > 0) {
-              factors.push(...retryData.results);
-            }
-          } else {
-            await retrySearchResp.text(); // consume body
-          }
-        }
-
-        if (factors.length === 0) {
-          // Final retry: broaden search without unit_type
-          const broadParams = new URLSearchParams({
-            query: searchQuery,
-            results_per_page: "3",
-          });
-
-          const broadResp = await fetch(
-            `https://api.climatiq.io/search?${broadParams.toString()}`,
-            { headers: { Authorization: `Bearer ${CLIMATIQ_API_KEY}` } }
-          );
-
-          if (broadResp.ok) {
-            const broadData = await broadResp.json();
-            if (broadData.results?.length > 0) {
-              factors.push(...broadData.results);
-            }
-          } else {
-            await broadResp.text();
-          }
-        }
-
-        if (factors.length === 0) {
-          console.warn(`No factors found for "${searchQuery}"`);
-          estimates.push(fallbackEstimate(projectId, act, null));
+        if (!searchResult.factor) {
+          console.warn(`No factors found for "${searchQuery}" after all fallbacks`);
+          estimates.push(fallbackEstimate(projectId, act, null, searchResult.confidence));
           continue;
         }
 
-        // Step 2: Pick the best factor and build estimate parameters
-        const bestFactor = pickBestFactor(factors, act);
-
-        // Step 3: Build estimation request
-        const estimateBody: any = {
-          emission_factor: {
-            activity_id: bestFactor.activity_id,
-          },
-          parameters: buildParameters(act, bestFactor),
-        };
-
-        // Add region to emission factor if available
-        if (climatiqRegion && climatiqRegion !== "GLOBAL") {
-          estimateBody.emission_factor.region = climatiqRegion;
-        }
-
-        const estimateResp = await fetch("https://api.climatiq.io/estimate", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${CLIMATIQ_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(estimateBody),
-        });
-
-        if (estimateResp.ok) {
-          const data = await estimateResp.json();
+        // ── Step 2: Estimate ──
+        if (!act.quantity && !act.amount) {
+          // No quantity — store search result only, flag as needs_quantity
           estimates.push({
             project_id: projectId,
             activity_id: act.id,
             region: act.region,
             matched_factor: {
-              id: data.emission_factor?.id || bestFactor.activity_id,
-              name: data.emission_factor?.name || bestFactor.name,
-              source: data.emission_factor?.source || bestFactor.source,
-              year: data.emission_factor?.year || bestFactor.year,
-              unit: bestFactor.unit_type?.[0] || act.unit_type,
+              id: searchResult.factor.activity_id,
+              name: searchResult.factor.name,
+              source: searchResult.factor.source,
+              year: searchResult.factor.year,
+              unit: searchResult.factor.unit_type?.[0] || null,
             },
-            confidence: 0.85,
-            co2e_kg: data.co2e || 0,
-            input_used: {
-              unit_type: act.unit_type,
-              quantity: act.quantity,
-              amount: act.amount,
-              currency: act.currency,
-            },
+            confidence: searchResult.confidence * 0.5, // lower confidence without estimate
+            co2e_kg: 0,
+            input_used: { unit_type: act.unit_type, quantity: null, amount: null, note: "needs_quantity" },
           });
-        } else {
-          // Estimate failed — try without region constraint
-          const retryEstBody: any = {
-            emission_factor: { activity_id: bestFactor.activity_id },
-            parameters: buildParameters(act, bestFactor),
-          };
+          continue;
+        }
 
-          const retryEstResp = await fetch("https://api.climatiq.io/estimate", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${CLIMATIQ_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(retryEstBody),
-          });
+        const estimateResult = await estimateSingle(
+          CLIMATIQ_API_KEY!,
+          searchResult.factor.activity_id,
+          buildParameters(act, searchResult.factor),
+          region
+        );
 
-          if (retryEstResp.ok) {
-            const retryData = await retryEstResp.json();
-            estimates.push({
-              project_id: projectId,
-              activity_id: act.id,
-              region: act.region,
-              matched_factor: {
-                id: retryData.emission_factor?.id || bestFactor.activity_id,
-                name: retryData.emission_factor?.name || bestFactor.name,
-                source: retryData.emission_factor?.source || bestFactor.source,
-                year: retryData.emission_factor?.year,
-                unit: bestFactor.unit_type?.[0] || act.unit_type,
-              },
-              confidence: 0.7,
-              co2e_kg: retryData.co2e || 0,
-              input_used: { unit_type: act.unit_type, quantity: act.quantity, amount: act.amount, currency: act.currency },
-            });
-          } else {
-            const errText = await retryEstResp.text();
-            console.error(`Estimate failed for factor ${bestFactor.activity_id}:`, errText);
-            estimates.push(fallbackEstimate(projectId, act, bestFactor));
+        if (estimateResult.error) {
+          // Retry without region
+          const retryResult = await estimateSingle(
+            CLIMATIQ_API_KEY!,
+            searchResult.factor.activity_id,
+            buildParameters(act, searchResult.factor),
+            null
+          );
+
+          if (retryResult.error) {
+            console.error(`Estimate failed for ${searchResult.factor.activity_id}:`, retryResult.error);
+            estimates.push(fallbackEstimate(projectId, act, searchResult.factor, searchResult.confidence * 0.5));
+            continue;
           }
+
+          estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.8));
+        } else {
+          estimates.push(buildEstimateRow(projectId, act, estimateResult, searchResult.factor, searchResult.confidence));
         }
       } catch (err) {
         console.error(`Error mapping activity ${act.id}:`, err);
-        estimates.push(fallbackEstimate(projectId, act, null));
+        estimates.push(fallbackEstimate(projectId, act, null, 0.2));
       }
     }
 
@@ -240,13 +150,15 @@ serve(async (req) => {
       await supabase.from("estimates").insert(estimates);
     }
 
+    await supabase.from("jobs").update({ progress: 90, stage: "ranking" }).eq("id", job.id);
+
     const succeeded = estimates.filter((e) => e.co2e_kg > 0).length;
 
     await supabase.from("jobs").update({
       status: "succeeded",
       progress: 100,
-      stage: "complete",
-      message: `Mapped ${estimates.length} activities (${succeeded} with estimates)`,
+      stage: "done",
+      message: `Mapped ${estimates.length} activities (${succeeded} with estimates)${useStub ? " [stub mode]" : ""}`,
     }).eq("id", job.id);
 
     const { data: updatedJob } = await supabase.from("jobs").select("*").eq("id", job.id).single();
@@ -263,89 +175,296 @@ serve(async (req) => {
   }
 });
 
-// ─── Helpers ──────────────────────────────────────────────
+// ─── Climatiq API Functions ──────────────────────────────
 
-function pickBestFactor(factors: any[], act: any): any {
-  // Prefer factors that match the unit_type
-  if (act.unit_type) {
-    const unitMatch = factors.find((f: any) =>
-      f.unit_type?.some((u: string) => u.toLowerCase() === act.unit_type.toLowerCase())
-    );
-    if (unitMatch) return unitMatch;
-  }
-  // Otherwise return the first (most relevant by Climatiq ranking)
-  return factors[0];
+interface SearchResult {
+  factor: any | null;
+  confidence: number;
+  fallbackUsed: string;
 }
+
+async function searchFactors(
+  apiKey: string,
+  query: string,
+  region: string | null,
+  unitType: string | null,
+): Promise<SearchResult> {
+  // Attempt 1: with region + unit_type
+  let factors = await callSearch(apiKey, query, region, unitType);
+  if (factors.length > 0) {
+    return { factor: factors[0], confidence: 0.9, fallbackUsed: "none" };
+  }
+
+  // Attempt 2: without region
+  factors = await callSearch(apiKey, query, null, unitType);
+  if (factors.length > 0) {
+    return { factor: factors[0], confidence: 0.75, fallbackUsed: "no_region" };
+  }
+
+  // Attempt 3: without region AND without unit_type
+  factors = await callSearch(apiKey, query, null, null);
+  if (factors.length > 0) {
+    return { factor: factors[0], confidence: 0.55, fallbackUsed: "no_region_no_unit" };
+  }
+
+  return { factor: null, confidence: 0, fallbackUsed: "all_failed" };
+}
+
+async function callSearch(
+  apiKey: string,
+  query: string,
+  region: string | null,
+  unitType: string | null,
+): Promise<any[]> {
+  const params = new URLSearchParams({
+    query,
+    data_version: DATA_VERSION,
+    results_per_page: "5",
+  });
+
+  if (region && region !== "GLOBAL") {
+    params.set("region", region);
+  }
+  if (unitType) {
+    params.set("unit_type", unitType);
+  }
+
+  const resp = await fetchWithRetry(
+    `https://api.climatiq.io/data/v1/search?${params.toString()}`,
+    {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    }
+  );
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error(`Search failed for "${query}" (region=${region}, unit=${unitType}):`, errText);
+    return [];
+  }
+
+  const data = await resp.json();
+  return data.results || [];
+}
+
+interface EstimateResult {
+  co2e_kg: number;
+  emission_factor: any;
+  constituent_gases: any;
+  error?: string;
+}
+
+async function estimateSingle(
+  apiKey: string,
+  activityId: string,
+  parameters: any,
+  region: string | null,
+): Promise<EstimateResult> {
+  const body: any = {
+    emission_factor: {
+      activity_id: activityId,
+      data_version: DATA_VERSION,
+    },
+    parameters,
+  };
+
+  if (region && region !== "GLOBAL") {
+    body.emission_factor.region = region;
+  }
+
+  const resp = await fetchWithRetry("https://api.climatiq.io/data/v1/estimate", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    return { co2e_kg: 0, emission_factor: null, constituent_gases: null, error: errText };
+  }
+
+  const data = await resp.json();
+  return {
+    co2e_kg: data.co2e || 0,
+    emission_factor: data.emission_factor || {},
+    constituent_gases: data.constituent_gases || null,
+  };
+}
+
+// ─── Retry with exponential backoff ─────────────────────
+
+async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 4): Promise<Response> {
+  let delay = 1000;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(url, init);
+    if (resp.status === 429 || (resp.status >= 500 && resp.status < 600)) {
+      if (attempt < maxRetries) {
+        console.warn(`Retry ${attempt + 1}/${maxRetries} for ${url} (status ${resp.status}), waiting ${delay}ms`);
+        await new Promise((r) => setTimeout(r, delay));
+        delay *= 2;
+        continue;
+      }
+    }
+    return resp;
+  }
+  // Should not reach here, but just in case
+  return fetch(url, init);
+}
+
+// ─── Build estimate row ─────────────────────────────────
+
+function buildEstimateRow(projectId: string, act: any, result: EstimateResult, factor: any, confidence: number) {
+  return {
+    project_id: projectId,
+    activity_id: act.id,
+    region: act.region,
+    matched_factor: {
+      id: result.emission_factor?.activity_id || factor.activity_id,
+      name: result.emission_factor?.name || factor.name,
+      source: result.emission_factor?.source || factor.source,
+      year: result.emission_factor?.year || factor.year,
+      unit: factor.unit_type?.[0] || act.unit_type,
+    },
+    confidence,
+    co2e_kg: result.co2e_kg,
+    input_used: {
+      unit_type: act.unit_type,
+      quantity: act.quantity,
+      amount: act.amount,
+      currency: act.currency,
+    },
+  };
+}
+
+// ─── Parameter building ─────────────────────────────────
 
 function buildParameters(act: any, factor: any): any {
   const factorUnitTypes: string[] = (factor.unit_type || []).map((u: string) => u.toLowerCase());
 
-  // Try to match activity data to what the factor expects
   if (act.unit_type === "Money" && act.amount) {
     return { money: act.amount, money_unit: (act.currency || "usd").toLowerCase() };
   }
-
   if (act.unit_type === "Energy" && act.quantity) {
     return { energy: act.quantity, energy_unit: mapEnergyUnit(act.unit) };
   }
-
   if (act.unit_type === "Weight" && act.quantity) {
     return { weight: act.quantity, weight_unit: mapWeightUnit(act.unit) };
   }
-
   if (act.unit_type === "Volume" && act.quantity) {
     return { volume: act.quantity, volume_unit: mapVolumeUnit(act.unit) };
   }
-
   if (act.unit_type === "Distance" && act.quantity) {
     return { distance: act.quantity, distance_unit: mapDistanceUnit(act.unit) };
   }
-
   if (act.unit_type === "Number" && act.quantity) {
     return { number: act.quantity };
   }
-
   if (act.unit_type === "Power" && act.quantity) {
-    // Convert power to energy assuming 1 year operation (8760 hours)
-    const kw = act.unit?.toLowerCase().includes("mw") ? act.quantity * 1000 : act.quantity;
-    return { energy: kw * 8760, energy_unit: "kWh" };
+    return { energy: act.quantity * 8760, energy_unit: act.unit?.toLowerCase().includes("mw") ? "MWh" : "kWh" };
+  }
+  if (act.unit_type === "Area" && act.quantity) {
+    return { area: act.quantity, area_unit: act.unit || "m2" };
+  }
+  if (act.unit_type === "Data" && act.quantity) {
+    return { data: act.quantity, data_unit: act.unit || "GB" };
+  }
+  if (act.unit_type === "Time" && act.quantity) {
+    return { time: act.quantity, time_unit: act.unit || "hour" };
   }
 
-  // Fallback: try to use whatever we have
+  // Fallback: match to what factor expects
   if (act.quantity) {
-    // Check what the factor expects
-    if (factorUnitTypes.includes("weight")) {
-      return { weight: act.quantity, weight_unit: mapWeightUnit(act.unit) };
-    }
-    if (factorUnitTypes.includes("energy")) {
-      return { energy: act.quantity, energy_unit: mapEnergyUnit(act.unit) };
-    }
-    if (factorUnitTypes.includes("money")) {
-      return { money: act.quantity, money_unit: (act.currency || "usd").toLowerCase() };
-    }
-    if (factorUnitTypes.includes("volume")) {
-      return { volume: act.quantity, volume_unit: mapVolumeUnit(act.unit) };
-    }
-    if (factorUnitTypes.includes("number")) {
-      return { number: act.quantity };
-    }
-    // Default to weight
+    if (factorUnitTypes.includes("weight")) return { weight: act.quantity, weight_unit: mapWeightUnit(act.unit) };
+    if (factorUnitTypes.includes("energy")) return { energy: act.quantity, energy_unit: mapEnergyUnit(act.unit) };
+    if (factorUnitTypes.includes("money")) return { money: act.quantity, money_unit: (act.currency || "usd").toLowerCase() };
+    if (factorUnitTypes.includes("volume")) return { volume: act.quantity, volume_unit: mapVolumeUnit(act.unit) };
+    if (factorUnitTypes.includes("number")) return { number: act.quantity };
     return { weight: act.quantity, weight_unit: mapWeightUnit(act.unit) };
   }
 
-  // Last resort: monetary fallback
   if (act.amount) {
     return { money: act.amount, money_unit: (act.currency || "usd").toLowerCase() };
   }
 
-  // Absolute fallback
-  if (factorUnitTypes.includes("money")) {
-    return { money: 1000, money_unit: "usd" };
-  }
+  if (factorUnitTypes.includes("money")) return { money: 1000, money_unit: "usd" };
   return { weight: 1, weight_unit: "kg" };
 }
 
-function fallbackEstimate(projectId: string, act: any, factor: any) {
+// ─── Stub mode ──────────────────────────────────────────
+
+function stubEstimate(act: any, searchQuery: string) {
+  const q = searchQuery.toLowerCase();
+  let activityId = "consumer_goods-type_general";
+  let factorName = "General consumer goods";
+
+  if (q.includes("cement") || q.includes("concrete")) {
+    activityId = "building_materials-type_cement";
+    factorName = "Cement production";
+  } else if (q.includes("steel")) {
+    activityId = "metals-type_basic_iron_and_steel";
+    factorName = "Steel production";
+  } else if (q.includes("electricity") || q.includes("grid")) {
+    activityId = "electricity-supply_grid-source_residual_mix";
+    factorName = "Electricity grid supply";
+  } else if (q.includes("diesel")) {
+    activityId = "fuel_type_diesel-fuel_use_stationary";
+    factorName = "Diesel fuel combustion";
+  } else if (q.includes("natural gas") || q.includes("gas")) {
+    activityId = "fuel_type_natural_gas-fuel_use_stationary";
+    factorName = "Natural gas combustion";
+  } else if (q.includes("server") || q.includes("gpu") || q.includes("computer")) {
+    activityId = "electrical_equipment-type_server";
+    factorName = "Server equipment";
+  } else if (q.includes("cooling")) {
+    activityId = "electrical_equipment-type_cooling";
+    factorName = "Cooling equipment";
+  } else if (q.includes("freight") || q.includes("transport") || q.includes("truck")) {
+    activityId = "freight_vehicle-vehicle_type_hgv-fuel_source_na";
+    factorName = "Freight transport";
+  } else if (q.includes("aluminum")) {
+    activityId = "metals-type_aluminium";
+    factorName = "Aluminum production";
+  } else if (q.includes("copper")) {
+    activityId = "metals-type_copper";
+    factorName = "Copper production";
+  } else if (q.includes("water")) {
+    activityId = "water-type_supply";
+    factorName = "Water supply";
+  }
+
+  // Deterministic estimate
+  const quantity = act.quantity || act.amount || 1;
+  const factors: Record<string, number> = {
+    Weight: 0.9,
+    Energy: 0.4,
+    Volume: 2.7,
+    Money: 0.5,
+    Power: 0.4 * 8760,
+    Distance: 0.12,
+    Number: 50,
+    Area: 15,
+  };
+  const factor = factors[act.unit_type as string] || 1.0;
+  const co2e_kg = quantity * factor;
+
+  return {
+    matched_factor: {
+      id: activityId,
+      name: factorName,
+      source: "Stub (no API key)",
+      year: 2023,
+      unit: act.unit_type,
+    },
+    confidence: 0.5,
+    co2e_kg: Math.round(co2e_kg * 100) / 100,
+  };
+}
+
+// ─── Fallback estimate ──────────────────────────────────
+
+function fallbackEstimate(projectId: string, act: any, factor: any, confidence: number) {
   return {
     project_id: projectId,
     activity_id: act.id,
@@ -357,72 +476,62 @@ function fallbackEstimate(projectId: string, act: any, factor: any) {
       year: factor?.year,
       unit: factor?.unit_type?.[0] || null,
     },
-    confidence: 0.2,
+    confidence,
     co2e_kg: 0,
     input_used: { unit_type: act.unit_type, quantity: act.quantity, amount: act.amount, currency: act.currency },
   };
 }
 
+// ─── Region mapping ─────────────────────────────────────
+
 function mapRegionToClimatiq(region: string): string {
   const map: Record<string, string> = {
-    texas_ercot: "US-TX",
-    norway_hydro: "NO",
-    virginia_pjm: "US-VA",
-    iowa_miso: "US-IA",
-    iceland_geo: "IS",
-    singapore: "SG",
-    us_west: "US-CA",
-    us_east: "US-VA",
-    europe: "EU",
-    uk: "GB",
-    germany: "DE",
-    france: "FR",
-    australia: "AU",
-    japan: "JP",
-    china: "CN",
-    india: "IN",
-    brazil: "BR",
-    canada: "CA",
-    global: "GLOBAL",
+    texas_ercot: "US-TX", norway_hydro: "NO", virginia_pjm: "US-VA",
+    iowa_miso: "US-IA", iceland_geo: "IS", singapore: "SG",
+    us_west: "US-CA", us_east: "US-VA", europe: "EU", uk: "GB",
+    germany: "DE", france: "FR", australia: "AU", japan: "JP",
+    china: "CN", india: "IN", brazil: "BR", canada: "CA", global: "GLOBAL",
   };
   return map[region] || "GLOBAL";
 }
 
+// ─── Unit mappers ───────────────────────────────────────
+
 function mapEnergyUnit(unit: string | null): string {
   if (!unit) return "kWh";
-  const lower = unit.toLowerCase();
-  if (lower.includes("gwh")) return "GWh";
-  if (lower.includes("mwh")) return "MWh";
-  if (lower.includes("mj")) return "MJ";
-  if (lower.includes("gj")) return "GJ";
-  if (lower.includes("tj")) return "TJ";
-  if (lower.includes("therm")) return "therm";
+  const l = unit.toLowerCase();
+  if (l.includes("gwh")) return "GWh";
+  if (l.includes("mwh")) return "MWh";
+  if (l.includes("gj")) return "GJ";
+  if (l.includes("mj")) return "MJ";
+  if (l.includes("tj")) return "TJ";
+  if (l.includes("therm")) return "therm";
   return "kWh";
 }
 
 function mapWeightUnit(unit: string | null): string {
   if (!unit) return "kg";
-  const lower = unit.toLowerCase();
-  if (lower === "t" || lower.includes("ton") || lower.includes("mt")) return "t";
-  if (lower.includes("lb")) return "lb";
-  if (lower === "g" || lower === "gram") return "g";
+  const l = unit.toLowerCase();
+  if (l === "t" || l.includes("ton") || l.includes("mt")) return "t";
+  if (l.includes("lb")) return "lb";
+  if (l === "g" || l === "gram") return "g";
   return "kg";
 }
 
 function mapVolumeUnit(unit: string | null): string {
   if (!unit) return "l";
-  const lower = unit.toLowerCase();
-  if (lower.includes("m3") || lower.includes("m³")) return "m3";
-  if (lower.includes("gal")) return "gal";
-  if (lower.includes("bbl")) return "bbl";
+  const l = unit.toLowerCase();
+  if (l.includes("m3") || l.includes("m³")) return "m3";
+  if (l.includes("gal")) return "gallon_us";
+  if (l.includes("bbl")) return "bbl";
   return "l";
 }
 
 function mapDistanceUnit(unit: string | null): string {
   if (!unit) return "km";
-  const lower = unit.toLowerCase();
-  if (lower.includes("mi")) return "mi";
-  if (lower === "m") return "m";
+  const l = unit.toLowerCase();
+  if (l.includes("mi")) return "mi";
+  if (l === "m") return "m";
   return "km";
 }
 
