@@ -11,13 +11,13 @@ import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 
 const REGIONS = [
-  { value: "texas_ercot", label: "Texas (ERCOT — 380 g/kWh)" },
-  { value: "norway_hydro", label: "Norway (Hydro — 10 g/kWh)" },
-  { value: "virginia_pjm", label: "Virginia (PJM — 310 g/kWh)" },
-  { value: "iowa_miso", label: "Iowa (MISO — 420 g/kWh)" },
-  { value: "iceland_geo", label: "Iceland (Geothermal — 15 g/kWh)" },
-  { value: "singapore", label: "Singapore (408 g/kWh)" },
-];
+{ value: "texas_ercot", label: "Texas (ERCOT — 380 g/kWh)" },
+{ value: "norway_hydro", label: "Norway (Hydro — 10 g/kWh)" },
+{ value: "virginia_pjm", label: "Virginia (PJM — 310 g/kWh)" },
+{ value: "iowa_miso", label: "Iowa (MISO — 420 g/kWh)" },
+{ value: "iceland_geo", label: "Iceland (Geothermal — 15 g/kWh)" },
+{ value: "singapore", label: "Singapore (408 g/kWh)" }];
+
 
 export default function Setup() {
   const { project, updateProject } = useProject();
@@ -41,11 +41,11 @@ export default function Setup() {
         year: project.year,
         companyType: project.companyType === "ai_infra" ? "ai_infra" : "other",
         primaryRegion: project.primaryRegion,
-        comparisonRegions: project.comparisonRegions,
+        comparisonRegions: project.comparisonRegions
       });
       updateProject({
         currentProjectId: created.id,
-        regions: [project.primaryRegion, ...project.comparisonRegions],
+        regions: [project.primaryRegion, ...project.comparisonRegions]
       });
       navigate("/upload");
     } finally {
@@ -59,9 +59,9 @@ export default function Setup() {
     <div className="max-w-2xl mx-auto space-y-8 animate-fade-in-up">
       {/* Page header */}
       <div className="flex items-center gap-4">
-        <div className="h-12 w-12 rounded-2xl bg-gradient-green flex items-center justify-center">
-          <Leaf className="h-6 w-6 text-primary-foreground" />
-        </div>
+        
+
+
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Project Setup</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Configure your carbon audit project parameters.</p>
@@ -80,8 +80,8 @@ export default function Setup() {
               value={project.projectName}
               onChange={(e) => updateProject({ projectName: e.target.value })}
               placeholder="e.g. Abilene Data Center Expansion"
-              className="h-11"
-            />
+              className="h-11" />
+
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -90,9 +90,9 @@ export default function Setup() {
               <Select value={String(project.year)} onValueChange={(v) => updateProject({ year: Number(v) })}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[2024, 2025, 2026, 2027].map((y) => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                  ))}
+                  {[2024, 2025, 2026, 2027].map((y) =>
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -116,9 +116,9 @@ export default function Setup() {
             <Select value={project.primaryRegion} onValueChange={(v) => updateProject({ primaryRegion: v })}>
               <SelectTrigger className="h-11"><SelectValue placeholder="Select primary region" /></SelectTrigger>
               <SelectContent>
-                {REGIONS.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-                ))}
+                {REGIONS.map((r) =>
+                <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -126,16 +126,16 @@ export default function Setup() {
           <div className="space-y-2">
             <Label>Comparison Regions (optional)</Label>
             <div className="flex flex-wrap gap-2">
-              {REGIONS.filter((r) => r.value !== project.primaryRegion).map((r) => (
-                <Badge
-                  key={r.value}
-                  variant={project.comparisonRegions.includes(r.value) ? "default" : "outline"}
-                  className="cursor-pointer select-none transition-all hover:scale-105"
-                  onClick={() => toggleComparison(r.value)}
-                >
+              {REGIONS.filter((r) => r.value !== project.primaryRegion).map((r) =>
+              <Badge
+                key={r.value}
+                variant={project.comparisonRegions.includes(r.value) ? "default" : "outline"}
+                className="cursor-pointer select-none transition-all hover:scale-105"
+                onClick={() => toggleComparison(r.value)}>
+
                   {r.label.split(" (")[0]}
                 </Badge>
-              ))}
+              )}
             </div>
           </div>
 
@@ -145,13 +145,13 @@ export default function Setup() {
               type="number"
               value={project.baselineFootprintKgCO2e ?? ""}
               onChange={(e) =>
-                updateProject({
-                  baselineFootprintKgCO2e: e.target.value ? Number(e.target.value) : undefined,
-                })
+              updateProject({
+                baselineFootprintKgCO2e: e.target.value ? Number(e.target.value) : undefined
+              })
               }
               placeholder="e.g. 1200000"
-              className="h-11"
-            />
+              className="h-11" />
+
           </div>
         </CardContent>
       </Card>
@@ -162,6 +162,6 @@ export default function Setup() {
           Create Project <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
-    </div>
-  );
+    </div>);
+
 }
