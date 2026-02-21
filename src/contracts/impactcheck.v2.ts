@@ -4,7 +4,7 @@ export type RegionCode = string;
 
 export type CompanyType = "ai_infra" | "other";
 
-export type UnitType = "Money" | "Weight" | "Energy" | "Distance" | "Unknown";
+export type UnitType = "Weight" | "Energy" | "Power" | "Volume" | "Area" | "Distance" | "Money" | "Number" | "Data" | "Time" | "WeightOverDistance" | "ContainerOverDistance" | "PassengerOverDistance" | "AreaOverTime" | "DataOverTime" | "DistanceOverTime" | "NumberOverTime" | "WeightOverTime";
 
 // ─── Core Entities ────────────────────────────────────────────────────
 
