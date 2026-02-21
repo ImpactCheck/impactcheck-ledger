@@ -22,7 +22,11 @@ def _row_to_estimate(row) -> ActivityEstimate:
             quantity=float(row["input_quantity"]) if row["input_quantity"] is not None else None,
             amount=float(row["input_amount"]) if row["input_amount"] is not None else None,
             currency=row["input_currency"],
+            note=row["input_note"] if "input_note" in row.keys() else None,
         ),
+        rank_position=int(row["rank_position"]) if "rank_position" in row.keys() and row["rank_position"] is not None else None,
+        selected=bool(row["selected"]) if "selected" in row.keys() and row["selected"] is not None else None,
+        mapping_confidence=row["mapping_confidence"] if "mapping_confidence" in row.keys() and row["mapping_confidence"] else None,
     )
 
 
@@ -34,8 +38,9 @@ def replace_estimates(project_id: str, estimates: list[ActivityEstimate]) -> lis
             INSERT INTO estimates (
                 project_id, activity_id, region, matched_factor_id, matched_factor_name,
                 matched_factor_source, matched_factor_year, matched_factor_unit,
-                confidence, co2e_kg, input_unit_type, input_quantity, input_amount, input_currency
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                confidence, co2e_kg, input_unit_type, input_quantity, input_amount, input_currency,
+                input_note, rank_position, selected, mapping_confidence
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -53,6 +58,10 @@ def replace_estimates(project_id: str, estimates: list[ActivityEstimate]) -> lis
                     estimate.inputUsed.quantity,
                     estimate.inputUsed.amount,
                     estimate.inputUsed.currency,
+                    estimate.inputUsed.note if estimate.inputUsed else None,
+                    estimate.rank_position,
+                    1 if (estimate.selected is True) else 0,
+                    estimate.mapping_confidence,
                 )
                 for estimate in estimates
             ],

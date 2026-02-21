@@ -43,6 +43,7 @@ export interface ExtractedActivity {
   id: string;
   projectId: string;
   text: string;
+  search_query?: string;
   unit_type?: UnitType;
   region?: RegionCode;
   quantity?: number;
@@ -70,7 +71,11 @@ export interface ActivityEstimate {
     quantity?: number;
     amount?: number;
     currency?: string;
+    note?: string;
   };
+  rank_position?: number;
+  selected?: boolean;
+  mapping_confidence?: "high" | "medium" | "low";
 }
 
 export interface Report {

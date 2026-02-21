@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable
 
-from app.jobs.deterministic import build_activity_estimates, build_extracted_activities
+from app.jobs.deterministic import build_extracted_activities
+from app.jobs.mapping_pipeline import run_mapping_pipeline
 from app.settings import get_settings
 from app.storage import activities_repo, documents_repo, estimates_repo, jobs_repo, projects_repo
 
@@ -105,21 +106,20 @@ class JobRunner:
                 raise RuntimeError("Project not found")
 
             activities = activities_repo.list_activities(project_id)
-            jobs_repo.update_job(
-                job_id,
-                progress=45,
-                stage="matching_factors",
-                message=f"Matching factors across {len(activities)} activities",
-            )
-            await asyncio.sleep(step_delay)
+            if not activities:
+                jobs_repo.update_job(
+                    job_id,
+                    status="succeeded",
+                    progress=100,
+                    stage="completed",
+                    message="No activities to map",
+                )
+                return
 
-            estimates = build_activity_estimates(project, activities)
-            jobs_repo.update_job(
-                job_id,
-                progress=80,
-                stage="writing_estimates",
-                message=f"Writing {len(estimates)} deterministic estimates",
-            )
+            def progress_cb(progress: int, stage: str, message: str) -> None:
+                jobs_repo.update_job(job_id, progress=progress, stage=stage, message=message)
+
+            estimates = run_mapping_pipeline(project, activities, progress_cb=progress_cb)
             await asyncio.sleep(step_delay)
 
             estimates_repo.replace_estimates(project_id, estimates)

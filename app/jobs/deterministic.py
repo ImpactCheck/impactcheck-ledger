@@ -142,12 +142,14 @@ def build_extracted_activities(project: Project, documents: list[Document]) -> l
             quantity_value = quantity
 
         text = f"{template.text} ({source_label}) batch {(idx % 9) + 1}"
+        search_query = _search_query_from_template(template)
 
         activities.append(
             ExtractedActivity(
                 id=f"act_{idx + 1:04d}",
                 projectId=project.id,
                 text=text,
+                search_query=search_query,
                 unit_type=template.unit_type,
                 region=region,
                 quantity=quantity_value,
@@ -160,6 +162,35 @@ def build_extracted_activities(project: Project, documents: list[Document]) -> l
         )
 
     return activities
+
+
+def _search_query_from_template(template: ActivityTemplate) -> str:
+    """Short 2–5 word keyword string for Climatiq Search (category + key terms)."""
+    category = template.category.lower()
+    text_lower = template.text.lower()
+    if "concrete" in text_lower or "foundation" in text_lower:
+        return "concrete foundation construction"
+    if "rebar" in text_lower or "steel" in text_lower:
+        return "steel rebar construction"
+    if "grid" in text_lower or "electricity" in text_lower:
+        return "electricity grid supply"
+    if "diesel" in text_lower:
+        return "diesel fuel combustion"
+    if "cooling" in text_lower:
+        return "cooling equipment"
+    if "transport" in text_lower or "commute" in text_lower:
+        return "freight transport"
+    if "cabling" in text_lower or "fiber" in text_lower:
+        return "fiber optic cabling"
+    if "hvac" in text_lower or "ductwork" in text_lower:
+        return "hvac ductwork infrastructure"
+    if "server" in text_lower or "gpu" in text_lower or "rack" in text_lower:
+        return "server rack hardware"
+    if "battery" in text_lower or "ups" in text_lower:
+        return "battery manufacturing"
+    if "transformer" in text_lower or "switchgear" in text_lower:
+        return "transformer switchgear"
+    return f"{category} {template.unit_type.lower()}"
 
 
 def _infer_category(text: str) -> str:

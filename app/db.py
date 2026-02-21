@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS activities (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
     text TEXT NOT NULL,
+    search_query TEXT,
     unit_type TEXT,
     region TEXT,
     quantity REAL,
@@ -63,6 +64,25 @@ CREATE TABLE IF NOT EXISTS activities (
     FOREIGN KEY(project_id) REFERENCES projects(id)
 );
 CREATE INDEX IF NOT EXISTS idx_activities_project_id ON activities(project_id);
+
+CREATE TABLE IF NOT EXISTS emission_factor_cache (
+    cache_key TEXT PRIMARY KEY,
+    activity_id TEXT NOT NULL,
+    factor_name TEXT NOT NULL,
+    factor_source TEXT NOT NULL,
+    factor_year INTEGER,
+    factor_region TEXT,
+    factor_unit TEXT,
+    factor_unit_type TEXT,
+    co2e_per_unit REAL,
+    co2e_kg REAL NOT NULL,
+    quantity REAL,
+    unit TEXT,
+    confidence TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_emission_factor_cache_expires ON emission_factor_cache(expires_at);
 
 CREATE TABLE IF NOT EXISTS estimates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +100,10 @@ CREATE TABLE IF NOT EXISTS estimates (
     input_quantity REAL,
     input_amount REAL,
     input_currency TEXT,
+    input_note TEXT,
+    rank_position INTEGER,
+    selected INTEGER NOT NULL DEFAULT 0,
+    mapping_confidence TEXT,
     FOREIGN KEY(project_id) REFERENCES projects(id)
 );
 CREATE INDEX IF NOT EXISTS idx_estimates_project_id ON estimates(project_id);
@@ -120,6 +144,28 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _migrate_activities_search_query(conn: sqlite3.Connection) -> None:
+    """Add search_query column to activities if missing (existing DBs)."""
+    cursor = conn.execute("PRAGMA table_info(activities)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "search_query" not in columns:
+        conn.execute("ALTER TABLE activities ADD COLUMN search_query TEXT")
+
+
+def _migrate_estimates_optional_columns(conn: sqlite3.Connection) -> None:
+    """Add optional columns to estimates if missing (existing DBs)."""
+    cursor = conn.execute("PRAGMA table_info(estimates)")
+    columns = [row[1] for row in cursor.fetchall()]
+    for col, sql in [
+        ("input_note", "ALTER TABLE estimates ADD COLUMN input_note TEXT"),
+        ("rank_position", "ALTER TABLE estimates ADD COLUMN rank_position INTEGER"),
+        ("selected", "ALTER TABLE estimates ADD COLUMN selected INTEGER DEFAULT 0"),
+        ("mapping_confidence", "ALTER TABLE estimates ADD COLUMN mapping_confidence TEXT"),
+    ]:
+        if col not in columns:
+            conn.execute(sql)
+
+
 def init_db() -> None:
     settings = get_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
@@ -129,6 +175,8 @@ def init_db() -> None:
 
     with get_conn() as conn:
         conn.executescript(SCHEMA_SQL)
+        _migrate_activities_search_query(conn)
+        _migrate_estimates_optional_columns(conn)
 
 
 @contextmanager

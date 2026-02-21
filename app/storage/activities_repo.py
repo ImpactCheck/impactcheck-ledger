@@ -9,6 +9,7 @@ def _row_to_activity(row) -> ExtractedActivity:
         id=row["id"],
         projectId=row["project_id"],
         text=row["text"],
+        search_query=row["search_query"] if "search_query" in row.keys() else None,
         unit_type=row["unit_type"],
         region=row["region"],
         quantity=float(row["quantity"]) if row["quantity"] is not None else None,
@@ -37,15 +38,16 @@ def replace_activities(project_id: str, activities: list[ExtractedActivity]) -> 
         conn.executemany(
             """
             INSERT INTO activities (
-                id, project_id, text, unit_type, region, quantity, unit, amount,
+                id, project_id, text, search_query, unit_type, region, quantity, unit, amount,
                 currency, source_document_id, note
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     activity.id,
                     project_id,
                     activity.text,
+                    activity.search_query,
                     activity.unit_type,
                     activity.region,
                     activity.quantity,

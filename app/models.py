@@ -62,6 +62,7 @@ class ExtractedActivity(StrictModel):
     id: str
     projectId: str
     text: str
+    search_query: str | None = None
     unit_type: UnitType | None = None
     region: RegionCode | None = None
     quantity: float | None = None
@@ -85,6 +86,7 @@ class EstimateInputUsed(StrictModel):
     quantity: float | None = None
     amount: float | None = None
     currency: str | None = None
+    note: str | None = None
 
 
 class ActivityEstimate(StrictModel):
@@ -94,6 +96,9 @@ class ActivityEstimate(StrictModel):
     confidence: float
     co2eKg: float
     inputUsed: EstimateInputUsed
+    rank_position: int | None = None
+    selected: bool | None = None
+    mapping_confidence: Literal["high", "medium", "low"] | None = None
 
 
 class ComplianceSide(StrictModel):
