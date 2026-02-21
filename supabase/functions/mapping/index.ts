@@ -475,8 +475,8 @@ function adaptParametersToValidTypes(act: any, validTypes: string[]): any | null
 // ─── LLM-assisted unit conversion ───────────────────────
 
 async function llmConvertUnits(act: any, validUnitTypes: string[]): Promise<any | null> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) return null;
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) return null;
 
   const prompt = `You are an expert in carbon accounting unit conversions.
 
@@ -504,26 +504,25 @@ Respond ONLY with a JSON object containing the Climatiq parameters. Examples:
 Respond with ONLY the JSON object, no explanation.`;
 
   try {
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-      }),
-    });
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1 },
+        }),
+      }
+    );
 
     if (!resp.ok) {
-      console.error("LLM conversion call failed:", resp.status);
+      console.error("Gemini conversion call failed:", resp.status);
       return null;
     }
 
     const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content?.trim();
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if (!content) return null;
 
     // Extract JSON from response (handle markdown code blocks)
