@@ -14,7 +14,279 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activities: {
+        Row: {
+          amount: number | null
+          created_at: string
+          currency: string | null
+          id: string
+          note: string | null
+          project_id: string
+          quantity: number | null
+          region: string | null
+          source_document_id: string | null
+          text: string
+          unit: string | null
+          unit_type: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          note?: string | null
+          project_id: string
+          quantity?: number | null
+          region?: string | null
+          source_document_id?: string | null
+          text: string
+          unit?: string | null
+          unit_type?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          note?: string | null
+          project_id?: string
+          quantity?: number | null
+          region?: string | null
+          source_document_id?: string | null
+          text?: string
+          unit?: string | null
+          unit_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          file_type: string
+          filename: string
+          id: string
+          project_id: string
+          status: string
+          storage_path: string | null
+          uploaded_at: string
+        }
+        Insert: {
+          file_type?: string
+          filename: string
+          id?: string
+          project_id: string
+          status?: string
+          storage_path?: string | null
+          uploaded_at?: string
+        }
+        Update: {
+          file_type?: string
+          filename?: string
+          id?: string
+          project_id?: string
+          status?: string
+          storage_path?: string | null
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estimates: {
+        Row: {
+          activity_id: string
+          co2e_kg: number
+          confidence: number
+          created_at: string
+          id: string
+          input_used: Json
+          matched_factor: Json
+          project_id: string
+          region: string | null
+        }
+        Insert: {
+          activity_id: string
+          co2e_kg?: number
+          confidence?: number
+          created_at?: string
+          id?: string
+          input_used?: Json
+          matched_factor?: Json
+          project_id: string
+          region?: string | null
+        }
+        Update: {
+          activity_id?: string
+          co2e_kg?: number
+          confidence?: number
+          created_at?: string
+          id?: string
+          input_used?: Json
+          matched_factor?: Json
+          project_id?: string
+          region?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estimates_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobs: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          progress: number
+          project_id: string
+          result: Json | null
+          stage: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          progress?: number
+          project_id: string
+          result?: Json | null
+          stage?: string | null
+          status?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          progress?: number
+          project_id?: string
+          result?: Json | null
+          stage?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jobs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          baseline_footprint_kg_co2e: number | null
+          company_type: string
+          comparison_regions: string[]
+          created_at: string
+          id: string
+          name: string
+          primary_region: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          baseline_footprint_kg_co2e?: number | null
+          company_type?: string
+          comparison_regions?: string[]
+          created_at?: string
+          id?: string
+          name: string
+          primary_region?: string
+          updated_at?: string
+          year?: number
+        }
+        Update: {
+          baseline_footprint_kg_co2e?: number | null
+          company_type?: string
+          comparison_regions?: string[]
+          created_at?: string
+          id?: string
+          name?: string
+          primary_region?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      recommendations: {
+        Row: {
+          constraints: string[] | null
+          created_at: string
+          expected_delta_kg: number
+          id: string
+          project_id: string
+          strategy_draft_text: string
+          summary: string
+          title: string
+        }
+        Insert: {
+          constraints?: string[] | null
+          created_at?: string
+          expected_delta_kg?: number
+          id?: string
+          project_id: string
+          strategy_draft_text?: string
+          summary: string
+          title: string
+        }
+        Update: {
+          constraints?: string[] | null
+          created_at?: string
+          expected_delta_kg?: number
+          id?: string
+          project_id?: string
+          strategy_draft_text?: string
+          summary?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recommendations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

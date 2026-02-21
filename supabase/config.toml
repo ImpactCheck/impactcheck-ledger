@@ -1,1 +1,13 @@
 project_id = "uypmmyvcxrpnebzsqeic"
+
+[functions.extract]
+verify_jwt = false
+
+[functions.mapping]
+verify_jwt = false
+
+[functions.recommendations]
+verify_jwt = false
+
+[functions.deploy-crusoe]
+verify_jwt = false

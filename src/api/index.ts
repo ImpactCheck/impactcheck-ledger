@@ -1,4 +1,4 @@
-import { createMockAdapter } from "./adapters/mockAdapter";
+import { createSupabaseAdapter } from "./adapters/supabaseAdapter";
 import type { ImpactcheckClient } from "./impactcheckClient";
 
-export const api: ImpactcheckClient = createMockAdapter();
+export const api: ImpactcheckClient = createSupabaseAdapter();
