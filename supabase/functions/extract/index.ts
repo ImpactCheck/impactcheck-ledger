@@ -24,7 +24,7 @@ serve(async (req) => {
     // Create job
     const { data: job, error: jobErr } = await supabase
       .from("jobs")
-      .insert({ project_id: projectId, type: "extract", status: "running", progress: 10, stage: "initializing" })
+      .insert({ project_id: projectId, type: "extract", status: "running", progress: 5, stage: "initializing" })
       .select()
       .single();
     if (jobErr) throw jobErr;
@@ -37,43 +37,82 @@ serve(async (req) => {
 
     if (!docs || docs.length === 0) {
       await supabase.from("jobs").update({ status: "failed", message: "No documents found", progress: 100 }).eq("id", job.id);
-      return new Response(JSON.stringify(job), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify(formatJob({ ...job, status: "failed" })), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    await supabase.from("jobs").update({ progress: 20, stage: "processing" }).eq("id", job.id);
+    await supabase.from("jobs").update({ progress: 15, stage: "reading_files" }).eq("id", job.id);
 
-    // Download document contents for extraction
-    const docTexts: string[] = [];
+    // Download document contents
+    const docTexts: { docId: string; filename: string; content: string }[] = [];
     for (const doc of docs) {
       if (doc.storage_path) {
         const { data: fileData } = await supabase.storage.from("documents").download(doc.storage_path);
         if (fileData) {
           const text = await fileData.text();
-          docTexts.push(`--- File: ${doc.filename} ---\n${text.slice(0, 15000)}`);
+          docTexts.push({ docId: doc.id, filename: doc.filename, content: text.slice(0, 20000) });
         }
-      } else {
-        docTexts.push(`--- File: ${doc.filename} (no content available) ---`);
       }
     }
 
-    await supabase.from("jobs").update({ progress: 40, stage: "extracting with AI" }).eq("id", job.id);
+    if (docTexts.length === 0) {
+      await supabase.from("jobs").update({ status: "failed", message: "Could not read any documents", progress: 100 }).eq("id", job.id);
+      return new Response(JSON.stringify(formatJob({ ...job, status: "failed" })), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
-    // Call Gemini to extract activities
-    const prompt = `You are a carbon emissions analyst. Extract all emission-producing activities from the following documents.
+    await supabase.from("jobs").update({ progress: 30, stage: "extracting" }).eq("id", job.id);
 
-For each activity, return a JSON array of objects with these fields:
-- text: description of the activity
-- unit_type: one of "Money", "Weight", "Energy", "Distance", "Unknown"
-- quantity: numeric quantity if mentioned
-- unit: unit of measurement (e.g., "MWh", "MT", "USD", "km")
-- amount: monetary amount if applicable
-- currency: currency code if applicable
-- note: any additional context
+    // Build prompt optimized for Climatiq Search API
+    const prompt = `You are a carbon emissions data extraction specialist. Your job is to extract emission-producing activities from documents and prepare them for the Climatiq emissions database Search API.
 
-Return ONLY valid JSON array, no markdown fences.
+CRITICAL RULES FOR search_query:
+The Climatiq Search API uses fuzzy text matching against emission factor names. Long verbose strings perform POORLY. Each search_query MUST be 2-5 generic material/activity keywords.
+
+TRANSFORMATION RULES:
+- Brand names → generic material: "NVIDIA GB200" → "computer servers", "Vertiv Liebert XDU" → "cooling equipment", "Caterpillar C175" → "diesel generator", "Tesla Megapack" → "battery lithium ion"
+- Specific grades → generic: "Portland cement CEM I 42.5N" → "cement", "C30/37 structural mix" → "concrete", "Grade 60 rebar" → "steel rebar", "6061-T6 aluminum" → "aluminum sheet"
+- Energy → Climatiq style: "Electricity from grid" → "electricity supply grid", "Gas boiler" → "natural gas combustion", "Backup diesel gensets" → "diesel fuel combustion", "Solar PV" → "solar photovoltaic"
+- Transport → Climatiq style: "Container shipping" → "freight sea shipping", "Trucking" → "freight road truck", "Air cargo" → "freight air transport"
+- Strip jargon, project codes, phase numbers, adjectives like "sustainable" or "low-carbon"
+
+UNIT TYPE - must be EXACTLY one of these Climatiq values (case-sensitive) or null:
+Weight, Energy, Power, Volume, Area, Distance, Money, Number, Data, Time, WeightOverDistance, ContainerOverDistance, PassengerOverDistance, AreaOverTime, DataOverTime, DistanceOverTime, NumberOverTime, WeightOverTime
+
+UNIT TYPE INFERENCE:
+- kg, t, ton, lb, g → "Weight"
+- kWh, MWh, GWh, MJ, GJ, TJ → "Energy"
+- W, kW, MW → "Power"
+- l, L, m3, gallon → "Volume"
+- m2, km2, ft2 → "Area"
+- km, mi → "Distance"
+- $, €, £, USD, EUR, GBP → "Money"
+- MB, GB, TB → "Data"
+- units, pieces, count → "Number"
+
+CATEGORY - one of: HARDWARE, CONSTRUCTION, ENERGY, TRANSPORT, OPERATIONS, PROCUREMENT, WASTE, WATER, OTHER
+
+IMPORTANT: If a line item has BOTH a physical quantity AND a monetary value, create TWO separate rows:
+- Row 1: unit_type = physical type, quantity = physical amount, unit = physical unit
+- Row 2: unit_type = "Money", quantity = spend amount, unit = currency code (e.g. "usd")
+
+Return a JSON array of objects. Each object must have:
+- search_query: (required) 2-5 word keyword string for Climatiq Search API. NO brand names, NO long descriptions.
+- raw_text: (required) Original text as extracted from document
+- unit_type: One valid Climatiq unit type or null
+- quantity: Numeric value if found, or null
+- unit: Unit string (e.g. "t", "kg", "kWh", "usd") or null
+- amount: Monetary amount if applicable, or null
+- currency: Currency code if applicable (e.g. "usd", "eur") or null
+- region: Region code if mentioned or null
+- category: One of the categories above
+- confidence: "HIGH", "MEDIUM", or "LOW"
+- source_doc_index: Index of the source document (0-based)
+- source_page: Page/row reference string or null
+- note: Any additional context or null
+
+Return ONLY valid JSON array, no markdown fences, no explanation.
 
 Documents:
-${docTexts.join("\n\n")}`;
+${docTexts.map((d, i) => `--- Document ${i}: ${d.filename} ---\n${d.content}`).join("\n\n")}`;
 
     const geminiResp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -82,7 +121,7 @@ ${docTexts.join("\n\n")}`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+          generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
         }),
       }
     );
@@ -91,15 +130,15 @@ ${docTexts.join("\n\n")}`;
       const errText = await geminiResp.text();
       console.error("Gemini error:", errText);
       await supabase.from("jobs").update({ status: "failed", message: "AI extraction failed", progress: 100 }).eq("id", job.id);
-      return new Response(JSON.stringify({ ...job, status: "failed", message: "AI extraction failed" }), {
+      return new Response(JSON.stringify(formatJob({ ...job, status: "failed", message: "AI extraction failed" })), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    await supabase.from("jobs").update({ progress: 60, stage: "normalizing_queries" }).eq("id", job.id);
+
     const geminiData = await geminiResp.json();
     let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
-    
-    // Clean markdown fences if present
     rawText = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
 
     let extractedActivities: any[];
@@ -110,7 +149,14 @@ ${docTexts.join("\n\n")}`;
       extractedActivities = [];
     }
 
-    await supabase.from("jobs").update({ progress: 70, stage: "saving activities" }).eq("id", job.id);
+    // Post-process: normalize search_query values
+    extractedActivities = extractedActivities.map((a: any) => ({
+      ...a,
+      search_query: normalizeSearchQuery(a.search_query || a.raw_text || "unknown"),
+      unit_type: validateUnitType(a.unit_type),
+    }));
+
+    await supabase.from("jobs").update({ progress: 75, stage: "writing_activities" }).eq("id", job.id);
 
     // Delete old activities for this project
     await supabase.from("activities").delete().eq("project_id", projectId);
@@ -122,15 +168,19 @@ ${docTexts.join("\n\n")}`;
     if (extractedActivities.length > 0) {
       const rows = extractedActivities.map((a: any) => ({
         project_id: projectId,
-        text: a.text || "Unknown activity",
+        text: a.search_query || "Unknown activity",
+        search_query: a.search_query || null,
         unit_type: a.unit_type || null,
-        region: proj?.primary_region || null,
+        region: a.region || proj?.primary_region || null,
         quantity: a.quantity || null,
         unit: a.unit || null,
         amount: a.amount || null,
         currency: a.currency || null,
-        source_document_id: null,
-        note: a.note || null,
+        source_document_id: a.source_doc_index != null ? docTexts[a.source_doc_index]?.docId : null,
+        source_page: a.source_page || null,
+        category: a.category || null,
+        confidence: a.confidence || null,
+        note: a.raw_text ? `Raw: ${(a.raw_text as string).slice(0, 200)}` : a.note || null,
       }));
       await supabase.from("activities").insert(rows);
     }
@@ -138,7 +188,7 @@ ${docTexts.join("\n\n")}`;
     await supabase.from("jobs").update({
       status: "succeeded",
       progress: 100,
-      stage: "complete",
+      stage: "done",
       message: `Extracted ${extractedActivities.length} activities`,
     }).eq("id", job.id);
 
@@ -155,6 +205,71 @@ ${docTexts.join("\n\n")}`;
     });
   }
 });
+
+// ─── Helpers ──────────────────────────────────────────────
+
+const VALID_UNIT_TYPES = new Set([
+  "Area", "AreaOverTime", "ContainerOverDistance", "Data", "DataOverTime",
+  "Distance", "DistanceOverTime", "Energy", "Power", "Money", "Number",
+  "NumberOverTime", "PassengerOverDistance", "Time", "Volume", "Weight",
+  "WeightOverDistance", "WeightOverTime",
+]);
+
+function validateUnitType(ut: string | null | undefined): string | null {
+  if (!ut) return null;
+  if (VALID_UNIT_TYPES.has(ut)) return ut;
+  // Try case-insensitive match
+  for (const valid of VALID_UNIT_TYPES) {
+    if (valid.toLowerCase() === ut.toLowerCase()) return valid;
+  }
+  return null;
+}
+
+// Brand → generic lookup for post-processing
+const BRAND_MAP: Record<string, string> = {
+  nvidia: "computer servers",
+  gb200: "computer servers",
+  nvl72: "computer servers",
+  h100: "gpu servers",
+  a100: "gpu servers",
+  vertiv: "cooling equipment",
+  liebert: "cooling equipment",
+  caterpillar: "diesel generator",
+  cummins: "diesel generator",
+  tesla: "battery lithium ion",
+  megapack: "battery lithium ion",
+  powerpack: "battery lithium ion",
+  abb: "electrical switchgear",
+  schneider: "electrical equipment",
+  knauf: "insulation glass wool",
+  earthwool: "insulation glass wool",
+  kingspan: "insulation board",
+};
+
+function normalizeSearchQuery(query: string): string {
+  if (!query) return "unknown activity";
+  
+  let q = query.toLowerCase().trim();
+  
+  // Strip project codes, phase numbers
+  q = q.replace(/\b(phase|stage|q[1-4]|fy\d+|20\d{2})\s*\d*/gi, "").trim();
+  // Strip adjectives that confuse Climatiq
+  q = q.replace(/\b(sustainable|low-carbon|eco-friendly|green|high-performance|premium|advanced)\b/gi, "").trim();
+  // Strip filler words
+  q = q.replace(/\b(procurement|supply|provision|installation|of|the|and|for|from|with)\b/gi, " ").trim();
+  
+  // Check brand lookup
+  const words = q.split(/\s+/);
+  for (const word of words) {
+    if (BRAND_MAP[word]) {
+      return BRAND_MAP[word];
+    }
+  }
+  
+  // Truncate to max 5 words
+  const cleaned = q.replace(/\s+/g, " ").trim().split(" ").slice(0, 5).join(" ");
+  return cleaned || "unknown activity";
+}
 
 function formatJob(j: any) {
   return {
