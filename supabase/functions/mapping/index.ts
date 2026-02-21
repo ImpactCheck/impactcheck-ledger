@@ -8,6 +8,13 @@ const corsHeaders = {
 
 const DATA_VERSION = "^21";
 
+/** Normalize Climatiq factor unit_type (may be string or string[]) to string[]. */
+function toUnitTypeArray(unitType: unknown): string[] {
+  if (Array.isArray(unitType)) return unitType.map((u) => String(u).toLowerCase());
+  if (unitType != null && unitType !== "") return [String(unitType).toLowerCase()];
+  return [];
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -104,7 +111,7 @@ serve(async (req) => {
               name: searchResult.factor.name,
               source: searchResult.factor.source,
               year: searchResult.factor.year,
-              unit: searchResult.factor.unit_type?.[0] || null,
+              unit: toUnitTypeArray(searchResult.factor.unit_type)[0] ?? null,
             },
             confidence: searchResult.confidence * 0.5, // lower confidence without estimate
             co2e_kg: 0,
@@ -183,28 +190,44 @@ interface SearchResult {
   fallbackUsed: string;
 }
 
+/** Shorter query variants by dropping the last word (e.g. "battery ups system" → ["battery ups", "battery"]). */
+function shorterQueryVariants(query: string): string[] {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  for (let n = words.length - 1; n >= 1; n--) {
+    out.push(words.slice(0, n).join(" "));
+  }
+  return out;
+}
+
 async function searchFactors(
   apiKey: string,
   query: string,
   region: string | null,
   unitType: string | null,
 ): Promise<SearchResult> {
-  // Attempt 1: with region + unit_type
-  let factors = await callSearch(apiKey, query, region, unitType);
-  if (factors.length > 0) {
-    return { factor: factors[0], confidence: 0.9, fallbackUsed: "none" };
-  }
+  const tryQuery = async (q: string, confidenceScale: number): Promise<SearchResult | null> => {
+    let factors = await callSearch(apiKey, q, region, unitType);
+    if (factors.length > 0) return { factor: factors[0], confidence: 0.9 * confidenceScale, fallbackUsed: "none" };
+    factors = await callSearch(apiKey, q, null, unitType);
+    if (factors.length > 0) return { factor: factors[0], confidence: 0.75 * confidenceScale, fallbackUsed: "no_region" };
+    factors = await callSearch(apiKey, q, null, null);
+    if (factors.length > 0) return { factor: factors[0], confidence: 0.55 * confidenceScale, fallbackUsed: "no_region_no_unit" };
+    return null;
+  };
 
-  // Attempt 2: without region
-  factors = await callSearch(apiKey, query, null, unitType);
-  if (factors.length > 0) {
-    return { factor: factors[0], confidence: 0.75, fallbackUsed: "no_region" };
-  }
+  // Attempt 1–3: full query with region/unit fallbacks
+  const full = await tryQuery(query, 1);
+  if (full) return full;
 
-  // Attempt 3: without region AND without unit_type
-  factors = await callSearch(apiKey, query, null, null);
-  if (factors.length > 0) {
-    return { factor: factors[0], confidence: 0.55, fallbackUsed: "no_region_no_unit" };
+  // Attempt 4+: shorter query variants (e.g. "battery ups system" → "battery ups" → "battery")
+  for (const shorter of shorterQueryVariants(query)) {
+    const result = await tryQuery(shorter, 0.85);
+    if (result) {
+      return { ...result, fallbackUsed: "shorter_query" };
+    }
   }
 
   return { factor: null, confidence: 0, fallbackUsed: "all_failed" };
@@ -325,7 +348,7 @@ function buildEstimateRow(projectId: string, act: any, result: EstimateResult, f
       name: result.emission_factor?.name || factor.name,
       source: result.emission_factor?.source || factor.source,
       year: result.emission_factor?.year || factor.year,
-      unit: factor.unit_type?.[0] || act.unit_type,
+      unit: toUnitTypeArray(factor.unit_type)[0] ?? act.unit_type,
     },
     confidence,
     co2e_kg: result.co2e_kg,
@@ -341,7 +364,7 @@ function buildEstimateRow(projectId: string, act: any, result: EstimateResult, f
 // ─── Parameter building ─────────────────────────────────
 
 function buildParameters(act: any, factor: any): any {
-  const factorUnitTypes: string[] = (factor.unit_type || []).map((u: string) => u.toLowerCase());
+  const factorUnitTypes: string[] = toUnitTypeArray(factor.unit_type);
 
   if (act.unit_type === "Money" && act.amount) {
     return { money: act.amount, money_unit: (act.currency || "usd").toLowerCase() };
@@ -474,7 +497,7 @@ function fallbackEstimate(projectId: string, act: any, factor: any, confidence: 
       name: factor?.name || "No factor matched",
       source: factor?.source || "N/A",
       year: factor?.year,
-      unit: factor?.unit_type?.[0] || null,
+      unit: factor != null ? (toUnitTypeArray(factor.unit_type)[0] ?? null) : null,
     },
     confidence,
     co2e_kg: 0,
