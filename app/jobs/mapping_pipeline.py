@@ -15,6 +15,7 @@ from app.climatiq_client import (
     map_region_to_climatiq,
     search_factors,
 )
+from app.jobs.gemini_estimation import estimate_co2e_with_gemini
 from app.models import (
     ActivityEstimate,
     EstimateInputUsed,
@@ -144,6 +145,112 @@ def _make_needs_quantity_estimate(
     )
 
 
+_CLIMATIQ_UT_MAP: dict[str, str] = {
+    "weight": "Weight",
+    "energy": "Energy",
+    "power": "Power",
+    "volume": "Volume",
+    "area": "Area",
+    "distance": "Distance",
+    "money": "Money",
+    "number": "Number",
+    "data": "Data",
+    "time": "Time",
+    "weightoverdistance": "WeightOverDistance",
+    "weight_over_distance": "WeightOverDistance",
+    "containeroverdistance": "ContainerOverDistance",
+    "container_over_distance": "ContainerOverDistance",
+    "passengeroverdistance": "PassengerOverDistance",
+    "passenger_over_distance": "PassengerOverDistance",
+    "areaovertime": "AreaOverTime",
+    "area_over_time": "AreaOverTime",
+    "dataovertime": "DataOverTime",
+    "data_over_time": "DataOverTime",
+    "distanceovertime": "DistanceOverTime",
+    "distance_over_time": "DistanceOverTime",
+    "numberovertime": "NumberOverTime",
+    "number_over_time": "NumberOverTime",
+    "weightovertime": "WeightOverTime",
+    "weight_over_time": "WeightOverTime",
+}
+
+
+def _climatiq_ut_to_our_ut(climatiq_ut: str) -> str | None:
+    """Map Climatiq lowercase unit_type string to our title-case enum value."""
+    if not climatiq_ut:
+        return None
+    return _CLIMATIQ_UT_MAP.get(climatiq_ut.lower().replace("-", "_"), climatiq_ut)
+
+
+def _retry_with_factor_unit_types(
+    activity: ExtractedActivity,
+    factor: dict[str, Any],
+    climatiq_region: str,
+) -> "EstimateResult | None":
+    """Try estimate_single for each unit_type the factor accepts.
+
+    Skips the unit_type that was already tried in the batch (activity.unit_type).
+    Returns the first successful EstimateResult, or None.
+    """
+    from app.climatiq_client import EstimateResult  # local import to avoid circular
+
+    factor_ut_list = factor.get("unit_type") or []
+    if not isinstance(factor_ut_list, list):
+        factor_ut_list = [factor_ut_list] if factor_ut_list else []
+
+    for climatiq_ut in factor_ut_list:
+        if not climatiq_ut:
+            continue
+        our_ut = _climatiq_ut_to_our_ut(str(climatiq_ut))
+        # Skip unit types that have no data on the activity
+        if our_ut == "Money" and activity.amount is None:
+            continue
+        if our_ut in ("Weight", "Energy", "Volume", "Distance", "Number", "Power", "Area", "Data", "Time") and activity.quantity is None:
+            continue
+
+        try:
+            params = build_parameters(
+                BuildParamsInput(our_ut, activity.quantity, activity.unit, activity.amount, activity.currency),
+                [climatiq_ut],
+            )
+            result = estimate_single(factor["activity_id"], params, region=climatiq_region)
+            if result and not result.error and result.co2e > 0:
+                return result
+        except Exception:
+            continue
+
+    return None
+
+
+def _make_gemini_estimate(
+    activity: ExtractedActivity,
+    factor: dict[str, Any] | None,
+    co2e_kg: float,
+) -> ActivityEstimate:
+    """Build an ActivityEstimate from a Gemini-generated CO2e value."""
+    return ActivityEstimate(
+        activityId=activity.id,
+        region=activity.region,
+        matchedFactor=MatchedFactor(
+            id=factor.get("activity_id", "gemini-estimate") if factor else "gemini-estimate",
+            name=factor.get("name", "Gemini AI Estimate") if factor else "Gemini AI Estimate",
+            source="Gemini AI",
+            year=None,
+            unit=_factor_unit(factor) if factor else None,
+        ),
+        confidence=0.45,
+        co2eKg=co2e_kg,
+        inputUsed=EstimateInputUsed(
+            unit_type=activity.unit_type,
+            quantity=activity.quantity,
+            amount=activity.amount,
+            currency=activity.currency,
+            note="gemini_fallback",
+        ),
+        mapping_confidence="low",
+    )
+
+
 def _store_cache(
     cache_key: str,
     activity: ExtractedActivity,
@@ -177,6 +284,7 @@ def run_mapping_pipeline(
     project: Project,
     activities: list[ExtractedActivity],
     progress_cb: Callable[[int, str, str], None] | None = None,
+    gemini_api_key: str | None = None,
 ) -> list[ActivityEstimate]:
     """
     Run cache → search → estimate → ranking. progress_cb(progress, stage, message).
@@ -258,6 +366,13 @@ def run_mapping_pipeline(
         }.get(search_result.fallback_used, "low")
 
         if not factor:
+            if gemini_api_key:
+                co2e = estimate_co2e_with_gemini(
+                    gemini_api_key, activity.text, activity.quantity, activity.unit, activity.unit_type
+                )
+                if co2e is not None and co2e > 0:
+                    estimates_out.append(_make_gemini_estimate(activity, None, co2e))
+                    continue
             estimates_out.append(_make_zero_estimate(activity))
             continue
 
@@ -313,8 +428,33 @@ def run_mapping_pipeline(
         # estimate_batch handles the actual HTTP call (and retries)
         results = estimate_batch(batch_body)
 
-        for (activity, factor, params, _, confidence_level, cache_key), result in zip(chunk, results):
+        for (activity, factor, params, clim_region_item, confidence_level, cache_key), result in zip(chunk, results):
             if result.error:
+                # Step 1: Retry with each accepted unit_type from the factor
+                retry = _retry_with_factor_unit_types(activity, factor, clim_region_item)
+                if retry and not retry.error and retry.co2e > 0:
+                    _store_cache(cache_key, activity, factor, retry.emission_factor, retry.co2e, confidence_level)
+                    estimates_out.append(
+                        _build_estimate(activity, factor, retry.emission_factor, retry.co2e, confidence_level)
+                    )
+                    continue
+
+                # Step 2: Gemini fallback estimation
+                if gemini_api_key:
+                    co2e = estimate_co2e_with_gemini(
+                        gemini_api_key,
+                        activity.text,
+                        activity.quantity,
+                        activity.unit,
+                        activity.unit_type,
+                        factor_name=factor.get("name"),
+                        factor_unit=_factor_unit(factor),
+                    )
+                    if co2e is not None and co2e > 0:
+                        estimates_out.append(_make_gemini_estimate(activity, factor, co2e))
+                        continue
+
+                # Step 3: Zero estimate with reduced confidence
                 estimates_out.append(
                     _build_estimate(activity, factor, {}, 0.0, confidence_level, confidence_mult=0.5)
                 )

@@ -14,9 +14,10 @@ import httpx
 
 from app.models import Document, ExtractedActivity, Project
 
+GEMINI_MODEL = "gemini-3-flash-preview"
 GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:generateContent"
+    f"{GEMINI_MODEL}:generateContent"
 )
 
 VALID_UNIT_TYPES = {
@@ -47,69 +48,150 @@ BRAND_MAP: dict[str, str] = {
 }
 
 EXTRACTION_PROMPT = """\
-You are a carbon emissions data extraction specialist. Extract all emission-producing \
-activities from the documents provided and prepare them for the Climatiq emissions \
-database Search API.
+You are a carbon emissions data extraction specialist. Extract ALL emission-producing \
+activities from the documents provided, formatted for the Climatiq emissions database.
 
-CRITICAL RULES FOR search_query:
-The Climatiq Search API uses fuzzy text matching against emission factor names. \
-Long verbose strings perform POORLY. Each search_query MUST be 2-5 generic \
-material/activity keywords.
+FUNDAMENTAL RULE: Every activity missing quantity, unit, or unit_type will produce \
+ZERO CO2e in the final carbon report. Use null ONLY as a last resort when the value \
+is genuinely absent from the document — NEVER null just because you are uncertain. \
+Estimate from context when needed.
 
-TRANSFORMATION RULES:
-- Brand names → generic material: "NVIDIA GB200" → "computer servers", \
-"Vertiv Liebert XDU" → "cooling equipment", "Caterpillar C175" → "diesel generator", \
-"Tesla Megapack" → "battery lithium ion"
-- Specific grades → generic: "Portland cement CEM I 42.5N" → "cement", \
-"C30/37 structural mix" → "concrete", "Grade 60 rebar" → "steel rebar", \
-"6061-T6 aluminum" → "aluminum sheet"
-- Energy → Climatiq style: "Electricity from grid" → "electricity supply grid", \
-"Gas boiler" → "natural gas combustion", "Backup diesel gensets" → "diesel fuel combustion"
-- Transport → Climatiq style: "Container shipping" → "freight sea shipping", \
-"Trucking" → "freight road truck", "Air cargo" → "freight air transport"
-- Strip jargon, project codes, phase numbers, adjectives like "sustainable" or "low-carbon"
+=== STEP 1: SCAN FOR ALL QUANTITIES ===
+Before writing any JSON, mentally locate EVERY quantity in the document:
+- Tables: every numeric cell (kg, t, kWh, m2, units, $, count columns)
+- Prose: "500 metric tonnes of...", "consuming 1,200 MWh annually"
+- Counts: "32 x NVIDIA H100 servers" → quantity=32, unit="units", unit_type="Number"
+- Power ratings: "2 x 500 kW generators" → quantity=1000, unit="kW", unit_type="Power"
+- Cost/spend: "$3.2M capex" → quantity=3200000, unit="usd", unit_type="Money"
+- Ranges: "200-250 t" → use lower bound: quantity=200
+- Implied/annual values: look for associated numbers even if not directly adjacent
 
-UNIT TYPE - must be EXACTLY one of these Climatiq values (case-sensitive) or null:
-Weight, Energy, Power, Volume, Area, Distance, Money, Number, Data, Time, \
-WeightOverDistance, ContainerOverDistance, PassengerOverDistance, AreaOverTime, \
-DataOverTime, DistanceOverTime, NumberOverTime, WeightOverTime
+=== STEP 2: search_query (2-5 generic keywords, NO brand names) ===
+The Climatiq Search API uses fuzzy matching. Verbose or brand-specific queries fail.
+REQUIRED TRANSFORMATIONS:
+- "NVIDIA H100 / GB200 / A100" → "gpu servers"
+- "Vertiv Liebert XDU / cooling unit" → "cooling equipment"
+- "Caterpillar C175 / Cummins QSK genset" → "diesel generator"
+- "Tesla Megapack / Powerwall / PowerPack" → "battery lithium ion"
+- "ABB switchgear / Schneider MV board" → "electrical switchgear"
+- "Knauf / Earthwool / Kingspan insulation" → "insulation glass wool"
+- "Portland cement CEM I/II/III" → "cement"
+- "C30/C40 ready-mix / structural concrete" → "concrete"
+- "Grade 60 rebar / BS4449 / deformed bar" → "steel rebar"
+- "6061-T6 / 6063-T5 / extruded aluminum" → "aluminum sheet"
+- "Grid electricity / mains power / utility" → "electricity supply grid"
+- "Natural gas boiler / HVAC gas / gas-fired" → "natural gas combustion"
+- "Diesel generator / diesel backup / diesel fuel use" → "diesel fuel combustion"
+- "Road haulage / trucking / HGV / lorry" → "freight road truck"
+- "Container shipping / sea freight / maritime" → "freight sea shipping"
+- "Air cargo / air freight / airfreight" → "freight air transport"
+Strip: all brand names, project codes (PRJ-123), phase/stage labels, \
+adjectives (sustainable, low-carbon, green, premium, advanced, high-performance)
 
-UNIT TYPE INFERENCE:
-- kg, t, ton, lb, g → "Weight"
-- kWh, MWh, GWh, MJ, GJ, TJ → "Energy"
-- W, kW, MW → "Power"
-- l, L, m3, gallon → "Volume"
-- m2, km2, ft2 → "Area"
-- km, mi → "Distance"
-- $, €, £, USD, EUR, GBP → "Money"
-- MB, GB, TB → "Data"
-- units, pieces, count → "Number"
+=== STEP 3: unit_type (EXACT case-sensitive value or null) ===
+Weight     - kg, t, ton, tonne, lb, g, MT (mass of materials)
+Energy     - kWh, MWh, GWh, MJ, GJ, TJ, therm (energy consumed)
+Power      - W, kW, MW, GW (installed/rated capacity, NOT energy over time)
+Volume     - l, L, m3, gallon, bbl, ft3 (fluid/gas volumes)
+Area       - m2, km2, ft2, acres (surface area)
+Distance   - km, mi, miles (travel or transport distances)
+Money      - $, USD, EUR, GBP, AUD and other currencies (spend amounts)
+Number     - units, pieces, items, servers, vehicles, count (discrete items)
+Data       - MB, GB, TB, PB (digital storage/transfer)
+Time       - hours, days, months, years (operational duration)
+WeightOverDistance   - t*km, tonne-km (freight transport)
+PassengerOverDistance - passenger-km, pax*km
+AreaOverTime         - m2/year, m2*year
 
-CATEGORY - one of: HARDWARE, CONSTRUCTION, ENERGY, TRANSPORT, OPERATIONS, \
-PROCUREMENT, WASTE, WATER, OTHER
+=== STEP 4: DUAL ROW RULE ===
+If a line has BOTH a physical quantity AND a monetary value, create TWO rows:
+  Row 1 (physical): unit_type=<physical>, quantity=<physical amount>, unit=<physical unit>
+  Row 2 (monetary): unit_type="Money", quantity=<spend>, unit=<currency code e.g. "usd">
 
-IMPORTANT: If a line item has BOTH a physical quantity AND a monetary value, \
-create TWO separate rows:
-- Row 1: unit_type = physical type, quantity = physical amount, unit = physical unit
-- Row 2: unit_type = "Money", quantity = spend amount, unit = currency code (e.g. "usd")
+=== STEP 5: CATEGORY ===
+HARDWARE | CONSTRUCTION | ENERGY | TRANSPORT | OPERATIONS | PROCUREMENT | WASTE | WATER | OTHER
 
-Return a JSON array. Each object must have:
-- search_query: (required) 2-5 word keyword string for Climatiq Search API. \
-NO brand names, NO long descriptions.
-- raw_text: (required) Original text as extracted from document
-- unit_type: One valid Climatiq unit type or null
-- quantity: Numeric value if found, or null
-- unit: Unit string (e.g. "t", "kg", "kWh", "usd") or null
-- amount: Monetary amount if applicable, or null
-- currency: Currency code if applicable (e.g. "usd", "eur") or null
-- region: Region code if mentioned or null
-- category: One of the categories above
-- confidence: "HIGH", "MEDIUM", or "LOW"
-- source_doc_index: 0-based index of the source document
-- source_page: Page/row reference string or null
-- note: Any additional context or null
+=== COMPLETE EXAMPLE OUTPUT ===
+[
+  {
+    "search_query": "cement",
+    "raw_text": "Portland Cement CEM I 42.5N - 850 metric tonnes",
+    "unit_type": "Weight",
+    "quantity": 850,
+    "unit": "t",
+    "amount": null,
+    "currency": null,
+    "region": null,
+    "category": "CONSTRUCTION",
+    "confidence": "HIGH",
+    "source_doc_index": 0,
+    "source_page": "BOM row 14",
+    "note": null
+  },
+  {
+    "search_query": "electricity supply grid",
+    "raw_text": "Annual electricity consumption 4,800 MWh @ $0.12/kWh = $576,000",
+    "unit_type": "Energy",
+    "quantity": 4800,
+    "unit": "MWh",
+    "amount": null,
+    "currency": null,
+    "region": null,
+    "category": "ENERGY",
+    "confidence": "HIGH",
+    "source_doc_index": 0,
+    "source_page": "p.12 Table 3",
+    "note": null
+  },
+  {
+    "search_query": "gpu servers",
+    "raw_text": "96 x NVIDIA H100 80GB SXM5, capex $18.5M",
+    "unit_type": "Number",
+    "quantity": 96,
+    "unit": "units",
+    "amount": null,
+    "currency": null,
+    "region": null,
+    "category": "HARDWARE",
+    "confidence": "HIGH",
+    "source_doc_index": 0,
+    "source_page": "p.5",
+    "note": "Monetary fallback row generated separately"
+  },
+  {
+    "search_query": "gpu servers",
+    "raw_text": "96 x NVIDIA H100 80GB SXM5, capex $18.5M",
+    "unit_type": "Money",
+    "quantity": 18500000,
+    "unit": "usd",
+    "amount": 18500000,
+    "currency": "usd",
+    "region": null,
+    "category": "HARDWARE",
+    "confidence": "MEDIUM",
+    "source_doc_index": 0,
+    "source_page": "p.5",
+    "note": "Monetary fallback for H100 server capex"
+  },
+  {
+    "search_query": "diesel generator",
+    "raw_text": "2 x 500 kW Cummins backup diesel generators",
+    "unit_type": "Power",
+    "quantity": 1000,
+    "unit": "kW",
+    "amount": null,
+    "currency": null,
+    "region": null,
+    "category": "HARDWARE",
+    "confidence": "HIGH",
+    "source_doc_index": 0,
+    "source_page": "spec sheet p.3",
+    "note": "Two 500 kW units combined"
+  }
+]
 
-Return ONLY a valid JSON array, no markdown fences, no explanation."""
+Now extract ALL emission-producing activities from the provided documents and return \
+a valid JSON array in EXACTLY the format above. No markdown fences, no explanation."""
 
 
 def _validate_unit_type(ut: str | None) -> str | None:
@@ -234,22 +316,39 @@ async def extract_with_gemini(
             params={"key": api_key},
             json={
                 "contents": [{"parts": all_parts}],
-                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 8192},
+                "generationConfig": {
+                    "temperature": 0.1,
+                    "maxOutputTokens": 16384,
+                    "response_mime_type": "application/json",
+                },
             },
         )
         resp.raise_for_status()
         data = resp.json()
 
-    raw_text: str = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "[]")
+    raw_text: str = (
+        data.get("candidates", [{}])[0]
+        .get("content", {})
+        .get("parts", [{}])[0]
+        .get("text", "")
+    )
     raw_text = re.sub(r"```json\s*", "", raw_text)
     raw_text = re.sub(r"```\s*", "", raw_text).strip()
 
-    try:
-        extracted: list[dict] = json.loads(raw_text)
-        if not isinstance(extracted, list):
-            extracted = []
-    except Exception:
-        extracted = []
+    extracted: list[dict] = []
+    if raw_text:
+        try:
+            parsed = json.loads(raw_text)
+            if isinstance(parsed, list):
+                extracted = parsed
+            elif isinstance(parsed, dict):
+                # JSON-mode may wrap in an object — check common keys
+                for key in ("activities", "items", "results", "data", "rows"):
+                    if key in parsed and isinstance(parsed[key], list):
+                        extracted = parsed[key]
+                        break
+        except Exception:
+            pass
 
     activities: list[ExtractedActivity] = []
     for idx, item in enumerate(extracted):

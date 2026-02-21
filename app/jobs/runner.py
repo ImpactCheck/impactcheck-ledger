@@ -149,7 +149,11 @@ class JobRunner:
             def progress_cb(progress: int, stage: str, message: str) -> None:
                 jobs_repo.update_job(job_id, progress=progress, stage=stage, message=message)
 
-            estimates = run_mapping_pipeline(project, activities, progress_cb=progress_cb)
+            estimates = run_mapping_pipeline(
+                project, activities,
+                progress_cb=progress_cb,
+                gemini_api_key=get_settings().gemini_api_key,
+            )
             await asyncio.sleep(step_delay)
 
             estimates_repo.replace_estimates(project_id, estimates)
