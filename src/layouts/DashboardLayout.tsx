@@ -40,9 +40,7 @@ export default function DashboardLayout() {
       <aside className="w-[272px] shrink-0 hidden md:flex flex-col bg-sidebar border-r border-sidebar-border sticky top-0 h-screen">
         {/* Logo */}
         <div className="px-6 py-6 flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl overflow-hidden shadow-md">
-            <img src={logoImg} alt="ImpactCheck" className="h-10 w-10 object-cover" />
-          </div>
+          <img src={logoImg} alt="ImpactCheck" className="h-10 w-10 object-contain" />
           <div>
             <span className="text-lg font-bold tracking-tight text-foreground">
               ImpactCheck
