@@ -1,18 +1,21 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { AuditInputs, calculateSCIScore, getComplianceLevel, formatTonnes, formatNumber, REGIONS } from "@/lib/carbon-calculations";
-import { FileText, Download } from "lucide-react";
+import { formatTonnes, formatNumber } from "@/contracts/impactcheck.v2";
+import type { Report } from "@/contracts/impactcheck.v2";
+import { FileText } from "lucide-react";
 import { ComplianceBadge } from "./ComplianceBadge";
 
 interface AuditCertificateProps {
-  inputs: AuditInputs;
+  report: Report;
+  projectName: string;
+  primaryRegion: string;
 }
 
-export function AuditCertificate({ inputs }: AuditCertificateProps) {
-  const { embodied, operational, sciScore, totalCarbon } = calculateSCIScore(inputs);
-  const compliance = getComplianceLevel(sciScore);
-  const region = REGIONS.find(r => r.name === inputs.region);
+export function AuditCertificate({ report, projectName, primaryRegion }: AuditCertificateProps) {
+  const primaryTotal = report.totalsByRegion[primaryRegion] ?? 0;
+  const usCompliance = report.compliance.us.status;
+  const categories = report.categoryBreakdownByRegion?.[primaryRegion] ?? [];
 
   return (
     <Dialog>
@@ -36,56 +39,69 @@ export function AuditCertificate({ inputs }: AuditCertificateProps) {
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Issue Date</p>
               <p className="font-mono text-sm">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
-            <ComplianceBadge level={compliance} />
+            <ComplianceBadge level={usCompliance} />
           </div>
 
           <Separator />
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Lifecycle Carbon</p>
-              <p className="text-2xl font-bold font-mono text-gradient-green">{formatTonnes(totalCarbon)} t</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Project</p>
+              <p className="text-lg font-bold">{projectName}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">SCI Score (2026 Standard)</p>
-              <p className="text-2xl font-bold font-mono">{sciScore.toFixed(4)} <span className="text-xs text-muted-foreground">gCO₂e/token</span></p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Carbon (Primary Region)</p>
+              <p className="text-2xl font-bold font-mono text-gradient-green">{formatTonnes(primaryTotal)} t</p>
             </div>
           </div>
 
           <Separator />
 
           <div>
-            <h4 className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Infrastructure Summary</h4>
+            <h4 className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Category Breakdown</h4>
             <div className="grid grid-cols-2 gap-2 text-sm font-mono">
-              <Row label="GPU Racks" value={`${inputs.gpuRacks} × GB200 NVL72`} />
-              <Row label="Cooling Units" value={String(inputs.coolingUnits)} />
-              <Row label="Concrete" value={`${formatNumber(inputs.concreteMT)} MT ${inputs.lowCarbonConcrete ? '(Low-Carbon)' : '(Standard)'}`} />
-              <Row label="Power Capacity" value={`${inputs.powerMW} MW`} />
-              <Row label="PUE" value={inputs.pue.toFixed(2)} />
-              <Row label="Region" value={region?.label || inputs.region} />
+              {categories.map((c) => (
+                <div key={c.category} className="flex justify-between">
+                  <span className="text-muted-foreground">{c.category}</span>
+                  <span>{formatTonnes(c.co2eKg)} t</span>
+                </div>
+              ))}
             </div>
           </div>
 
           <Separator />
 
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <h4 className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Embodied Carbon (The Build)</h4>
-              <div className="space-y-1 text-sm font-mono">
-                <p>GPU Manufacturing: <span className="text-foreground">{formatTonnes(embodied.gpuCarbon)} t</span></p>
-                <p>Cooling Systems: <span className="text-foreground">{formatTonnes(embodied.coolingCarbon)} t</span></p>
-                <p>Concrete: <span className="text-foreground">{formatTonnes(embodied.concreteCarbon)} t</span></p>
-                <p className="font-semibold text-primary">Total: {formatTonnes(embodied.total)} t</p>
+          <div>
+            <h4 className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Compliance</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-medium mb-1">US (EPA)</p>
+                <ComplianceBadge level={report.compliance.us.status} />
+                <ul className="mt-2 text-xs text-muted-foreground space-y-1">
+                  {report.compliance.us.reasons.map((r, i) => <li key={i}>• {r}</li>)}
+                </ul>
               </div>
-            </div>
-            <div>
-              <h4 className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Operational Carbon (The Pulse)</h4>
-              <div className="space-y-1 text-sm font-mono">
-                <p>Annual Emissions: <span className="text-foreground">{formatTonnes(operational.annualKg)} t/yr</span></p>
-                <p>Grid Intensity: <span className="text-foreground">{operational.gridIntensity} g/kWh</span></p>
+              <div>
+                <p className="font-medium mb-1">EU (CSRD)</p>
+                <ComplianceBadge level={report.compliance.eu.status} />
+                <ul className="mt-2 text-xs text-muted-foreground space-y-1">
+                  {report.compliance.eu.reasons.map((r, i) => <li key={i}>• {r}</li>)}
+                </ul>
               </div>
             </div>
           </div>
+
+          {report.deltaVsBaselineKg !== undefined && (
+            <>
+              <Separator />
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Delta vs. Baseline</p>
+                <p className="text-lg font-bold font-mono">
+                  {report.deltaVsBaselineKg > 0 ? "+" : ""}{formatTonnes(report.deltaVsBaselineKg)} t
+                </p>
+              </div>
+            </>
+          )}
 
           <Separator />
 
@@ -96,14 +112,5 @@ export function AuditCertificate({ inputs }: AuditCertificateProps) {
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <>
-      <span className="text-muted-foreground">{label}</span>
-      <span>{value}</span>
-    </>
   );
 }

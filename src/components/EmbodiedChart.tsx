@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { formatTonnes } from "@/lib/carbon-calculations";
+import { formatTonnes } from "@/contracts/impactcheck.v2";
 
 interface EmbodiedChartProps {
   gpuCarbon: number;
