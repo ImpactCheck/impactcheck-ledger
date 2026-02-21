@@ -1,12 +1,12 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, Upload as UploadIcon, FileSpreadsheet, FileText as FileTextIcon, Check, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload as UploadIcon, FileSpreadsheet, FileText as FileTextIcon, Check, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
 import type { Document, JobStatus } from "@/contracts/impactcheck.v2";
+import JobProgressCard from "@/components/JobProgressCard";
 
 export default function Upload() {
   const navigate = useNavigate();
@@ -153,25 +153,7 @@ export default function Upload() {
             <CardDescription>Parse uploaded documents to extract carbon-relevant line items.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {job && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{job.stage ?? "Waiting"}</span>
-                  <span className="font-mono text-xs">{job.progress}%</span>
-                </div>
-                <Progress value={job.progress} className="h-2" />
-                {extractFailed && (
-                  <div className="flex items-center gap-2 text-sm text-destructive">
-                    <AlertCircle className="h-4 w-4" /> Extraction failed. Please retry.
-                  </div>
-                )}
-                {extractDone && (
-                  <div className="flex items-center gap-2 text-sm text-primary font-medium">
-                    <Check className="h-4 w-4" /> Extraction complete — {job.message}
-                  </div>
-                )}
-              </div>
-            )}
+            {job && <JobProgressCard job={job} type="extract" />}
             {!extractRunning && !extractDone && (
               <Button onClick={handleExtract} className="gap-2 rounded-xl" disabled={extractRunning}>
                 Run Extraction
