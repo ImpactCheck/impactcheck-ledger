@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 RegionCode = str
 CompanyType = Literal["ai_infra", "other"]
-UnitType = Literal["Money", "Weight", "Energy", "Distance", "Unknown"]
+UnitType = Literal["Weight", "Energy", "Power", "Volume", "Area", "Distance", "Money", "Number", "Data", "Time", "WeightOverDistance", "ContainerOverDistance", "PassengerOverDistance", "AreaOverTime", "DataOverTime", "DistanceOverTime", "NumberOverTime", "WeightOverTime"]
 
 DocumentStatus = Literal["pending", "processing", "ready", "error"]
 JobState = Literal["queued", "running", "succeeded", "failed"]
