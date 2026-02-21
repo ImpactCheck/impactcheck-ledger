@@ -52,8 +52,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const FALLBACK: ProjectContextValue = {
+  project: DEFAULT_PROJECT,
+  setProject: () => {},
+  updateProject: () => {},
+};
+
 export function useProject() {
   const ctx = useContext(ProjectContext);
-  if (!ctx) throw new Error("useProject must be used within ProjectProvider");
-  return ctx;
+  // Return fallback during HMR transitions instead of crashing
+  return ctx ?? FALLBACK;
 }
