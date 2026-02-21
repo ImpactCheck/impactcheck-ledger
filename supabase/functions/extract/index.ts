@@ -168,7 +168,7 @@ Return ONLY valid JSON array, no markdown fences, no explanation.`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: geminiParts }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+          generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
         }),
       }
     );
@@ -190,8 +190,22 @@ Return ONLY valid JSON array, no markdown fences, no explanation.`;
     try {
       extractedActivities = JSON.parse(rawText);
     } catch {
-      console.error("Failed to parse Gemini response:", rawText.slice(0, 500));
-      extractedActivities = [];
+      // Gemini may have been truncated — try to salvage partial JSON array
+      console.warn("Full JSON parse failed, attempting partial recovery…");
+      try {
+        // Find the last complete object by locating last "},"  or "}" before end
+        const lastComplete = rawText.lastIndexOf("}");
+        if (lastComplete > 0) {
+          const trimmed = rawText.slice(0, lastComplete + 1) + "]";
+          extractedActivities = JSON.parse(trimmed);
+          console.log(`Recovered ${extractedActivities.length} activities from truncated response`);
+        } else {
+          extractedActivities = [];
+        }
+      } catch {
+        console.error("Failed to parse Gemini response (even partial):", rawText.slice(0, 500));
+        extractedActivities = [];
+      }
     }
 
     // Post-process: normalize search_query values
