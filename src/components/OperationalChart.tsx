@@ -1,6 +1,5 @@
-import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, ComposedChart } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, ComposedChart } from "recharts";
 import { formatTonnes } from "@/contracts/impactcheck.v2";
-import { useTheme } from "@/contexts/ThemeContext";
 
 interface TimelinePoint {
   month: string;
@@ -13,15 +12,6 @@ interface OperationalChartProps {
 }
 
 export function OperationalChart({ data }: OperationalChartProps) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-
-  const gridStroke = isDark ? "hsl(220 15% 20%)" : "hsl(220 15% 92%)";
-  const tickFill = isDark ? "hsl(215 15% 55%)" : "hsl(220 10% 45%)";
-  const tooltipBg = isDark ? "hsl(220 18% 13%)" : "hsl(0 0% 100%)";
-  const tooltipBorder = isDark ? "hsl(220 15% 20%)" : "hsl(220 15% 92%)";
-  const labelColor = isDark ? "hsl(210 20% 90%)" : "hsl(220 10% 20%)";
-
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
       <div>
@@ -37,13 +27,13 @@ export function OperationalChart({ data }: OperationalChartProps) {
                 <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-            <XAxis dataKey="month" tick={{ fill: tickFill, fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="left" tick={{ fill: tickFill, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatTonnes(v)} />
-            <YAxis yAxisId="right" orientation="right" tick={{ fill: tickFill, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${v} TPS`} />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 20%)" />
+            <XAxis dataKey="month" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="left" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatTonnes(v)} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${v} TPS`} />
             <Tooltip
-              contentStyle={{ backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 12 }}
-              labelStyle={{ color: labelColor }}
+              contentStyle={{ backgroundColor: "hsl(220 18% 13%)", border: "1px solid hsl(220 15% 20%)", borderRadius: 12, fontSize: 12 }}
+              labelStyle={{ color: "hsl(210 20% 90%)" }}
             />
             <Area yAxisId="left" type="monotone" dataKey="emissions" stroke="hsl(var(--primary))" fill="url(#emissionsGrad)" strokeWidth={2} name="Emissions (tonnes)" />
             <Line yAxisId="right" type="monotone" dataKey="tps" stroke="hsl(145 45% 55%)" strokeWidth={2} dot={false} name="Tokens/sec" />
