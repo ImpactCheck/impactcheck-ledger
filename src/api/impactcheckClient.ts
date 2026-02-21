@@ -19,6 +19,7 @@ export interface ImpactcheckClient {
     comparisonRegions?: string[];
   }): Promise<Project>;
   getProject(projectId: string): Promise<Project>;
+  listProjects(): Promise<Project[]>;
 
   // Documents
   uploadDocument(projectId: string, file: File): Promise<Document>;
