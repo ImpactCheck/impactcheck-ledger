@@ -1,73 +1,155 @@
-# Welcome to your Lovable project
+# ImpactCheck v2 Backend (Phase 1)
 
-## Project info
+Deterministic FastAPI + SQLite backend for the ImpactCheck v2 frontend contract.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Tech
 
-## How can I edit this code?
+- Python 3.11
+- FastAPI
+- SQLite
+- Asyncio background jobs
 
-There are several ways of editing your application.
+## Structure
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```text
+app/
+  main.py
+  settings.py
+  db.py
+  models.py
+  storage/
+  jobs/
+  routes/
 ```
 
-**Edit a file directly in GitHub**
+## Setup
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
 
-**Use GitHub Codespaces**
+## Run
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+uvicorn app.main:app --reload
+```
 
-## What technologies are used for this project?
+## Frontend Proxy Note
 
-This project is built with:
+Your Vite frontend can call `/api/*` directly if proxy is configured to the backend (typically `http://localhost:8000`).
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Example `vite.config.ts` snippet:
 
-## How can I deploy this project?
+```ts
+server: {
+  proxy: {
+    "/api": "http://localhost:8000",
+  },
+}
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## Implemented Endpoints
 
-## Can I connect a custom domain to my Lovable project?
+- `POST /api/projects`
+- `GET /api/projects/{id}`
+- `POST /api/projects/{id}/documents`
+- `GET /api/projects/{id}/documents`
+- `POST /api/projects/{id}/extract`
+- `GET /api/jobs/{jobId}`
+- `GET /api/projects/{id}/activities`
+- `PUT /api/projects/{id}/activities`
+- `POST /api/projects/{id}/export-csv`
+- `POST /api/projects/{id}/map-emissions`
+- `GET /api/projects/{id}/estimates`
+- `GET /api/projects/{id}/report`
+- `POST /api/projects/{id}/recommendations`
+- `POST /api/projects/{id}/strategy/finalize`
+- `POST /api/projects/{id}/deploy/crusoe`
+- `GET /api/projects/{id}/deploy/status`
 
-Yes, you can!
+## Deterministic Stub Behavior
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+- Upload writes file to `data/uploads/{projectId}/{docId}_{filename}`
+- Extract job deterministically creates 30-80 `ExtractedActivity` rows from filenames + fixed templates
+- Mapping job deterministically generates `ActivityEstimate` rows from `text + region`
+- Report returns deterministic region totals, hotspots, baseline delta, and compliance status/reasons
+- Recommendations returns 4-6 deterministic scenarios from current hotspots
+- Deploy endpoints return deterministic mock status/log progression
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Acceptance Test Flow (curl)
+
+### 1) Create project
+
+```bash
+PROJECT_JSON=$(curl -s -X POST http://localhost:8000/api/projects \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "Abilene DC Expansion",
+    "year": 2026,
+    "companyType": "ai_infra",
+    "primaryRegion": "texas_ercot",
+    "comparisonRegions": ["norway_hydro"]
+  }')
+
+echo "$PROJECT_JSON"
+PROJECT_ID=$(echo "$PROJECT_JSON" | jq -r '.id')
+```
+
+### 2) Upload document
+
+```bash
+echo "hardware,bom" > /tmp/hardware_bom_2026.csv
+curl -s -X POST "http://localhost:8000/api/projects/$PROJECT_ID/documents" \
+  -F "file=@/tmp/hardware_bom_2026.csv"
+```
+
+### 3) Start extract + poll job
+
+```bash
+EXTRACT_JOB_JSON=$(curl -s -X POST "http://localhost:8000/api/projects/$PROJECT_ID/extract")
+echo "$EXTRACT_JOB_JSON"
+EXTRACT_JOB_ID=$(echo "$EXTRACT_JOB_JSON" | jq -r '.jobId')
+
+while true; do
+  JOB=$(curl -s "http://localhost:8000/api/jobs/$EXTRACT_JOB_ID")
+  echo "$JOB"
+  STATUS=$(echo "$JOB" | jq -r '.status')
+  if [ "$STATUS" = "succeeded" ] || [ "$STATUS" = "failed" ]; then
+    break
+  fi
+  sleep 0.3
+done
+```
+
+### 4) List activities
+
+```bash
+curl -s "http://localhost:8000/api/projects/$PROJECT_ID/activities"
+```
+
+### 5) Start mapping + poll job
+
+```bash
+MAP_JOB_JSON=$(curl -s -X POST "http://localhost:8000/api/projects/$PROJECT_ID/map-emissions")
+echo "$MAP_JOB_JSON"
+MAP_JOB_ID=$(echo "$MAP_JOB_JSON" | jq -r '.jobId')
+
+while true; do
+  JOB=$(curl -s "http://localhost:8000/api/jobs/$MAP_JOB_ID")
+  echo "$JOB"
+  STATUS=$(echo "$JOB" | jq -r '.status')
+  if [ "$STATUS" = "succeeded" ] || [ "$STATUS" = "failed" ]; then
+    break
+  fi
+  sleep 0.3
+done
+```
+
+### 6) Get report
+
+```bash
+curl -s "http://localhost:8000/api/projects/$PROJECT_ID/report"
+```
