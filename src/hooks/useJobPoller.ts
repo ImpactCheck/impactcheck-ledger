@@ -6,16 +6,22 @@ const POLL_INTERVAL_MS = 1500;
 
 /**
  * Encapsulates the start → poll → stop lifecycle for a backend job.
+ * Supports auto-resuming in-progress jobs when the user navigates back.
  *
  * Usage:
- *   const { job, start, isRunning } = useJobPoller({ onSuccess: loadData });
- *   // trigger:
- *   await start(() => api.startExtract(projectId));
+ *   const { job, start, isRunning } = useJobPoller({
+ *     projectId,
+ *     jobType: "extract",
+ *     onSuccess: loadData,
+ *   });
  */
-export function useJobPoller(options?: { onSuccess?: (job: JobStatus) => void }) {
+export function useJobPoller(options?: {
+  projectId?: string;
+  jobType?: string;
+  onSuccess?: (job: JobStatus) => void;
+}) {
   const [job, setJob] = useState<JobStatus | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Keep callback in a ref so `start` stays stable even if onSuccess changes.
   const onSuccessRef = useRef(options?.onSuccess);
   useEffect(() => { onSuccessRef.current = options?.onSuccess; });
 
@@ -26,7 +32,6 @@ export function useJobPoller(options?: { onSuccess?: (job: JobStatus) => void })
     }
   }, []);
 
-  // Always clean up the interval on unmount.
   useEffect(() => stop, [stop]);
 
   const startPolling = useCallback((jobId: string) => {
@@ -45,11 +50,6 @@ export function useJobPoller(options?: { onSuccess?: (job: JobStatus) => void })
     }, POLL_INTERVAL_MS);
   }, [stop]);
 
-  /**
-   * Call `starter` to kick off a job, then begin polling.
-   * If the job is already terminal when `starter` resolves (synchronous
-   * edge-function path), polling is skipped and `onSuccess` fires immediately.
-   */
   const start = useCallback(async (starter: () => Promise<JobStatus>) => {
     stop();
     const initial = await starter();
@@ -61,10 +61,6 @@ export function useJobPoller(options?: { onSuccess?: (job: JobStatus) => void })
     startPolling(initial.id);
   }, [stop, startPolling]);
 
-  /**
-   * Resume polling for a job whose ID is already known (e.g. after a page
-   * navigation). Fetches current state immediately, then polls if still running.
-   */
   const resume = useCallback(async (jobId: string) => {
     stop();
     try {
@@ -79,6 +75,26 @@ export function useJobPoller(options?: { onSuccess?: (job: JobStatus) => void })
       // Job not found or network error — ignore.
     }
   }, [stop, startPolling]);
+
+  // Auto-resume: on mount, check for an active job matching projectId + jobType
+  const hasAutoResumed = useRef(false);
+  useEffect(() => {
+    const projectId = options?.projectId;
+    const jobType = options?.jobType;
+    if (!projectId || !jobType || hasAutoResumed.current) return;
+    hasAutoResumed.current = true;
+
+    api.getActiveJob(projectId, jobType).then((activeJob) => {
+      if (activeJob) {
+        setJob(activeJob);
+        if (activeJob.status === "succeeded" || activeJob.status === "failed") {
+          if (activeJob.status === "succeeded") onSuccessRef.current?.(activeJob);
+        } else {
+          startPolling(activeJob.id);
+        }
+      }
+    }).catch(() => {/* ignore */});
+  }, [options?.projectId, options?.jobType, startPolling]);
 
   const isRunning = job?.status === "running" || job?.status === "queued";
 

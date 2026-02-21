@@ -125,6 +125,20 @@ export function createSupabaseAdapter(): ImpactcheckClient {
       return mapJob(data);
     },
 
+    async getActiveJob(projectId, type) {
+      const { data, error } = await supabase
+        .from("jobs")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("type", type)
+        .in("status", ["queued", "running"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? mapJob(data) : null;
+    },
+
     // ─── Activities ────────────────────────────────────────
     async getActivities(projectId) {
       const { data, error } = await supabase

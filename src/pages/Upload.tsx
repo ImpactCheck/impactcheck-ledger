@@ -18,7 +18,10 @@ export default function Upload() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { job, start: startExtract, isRunning: extractRunning } = useJobPoller();
+  const { job, start: startExtract, isRunning: extractRunning } = useJobPoller({
+    projectId,
+    jobType: "extract",
+  });
 
   const loadDocs = useCallback(() => {
     api.listDocuments(projectId).then(setDocs);

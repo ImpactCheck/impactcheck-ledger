@@ -287,6 +287,9 @@ export function createMockAdapter(): ImpactcheckClient {
     async getJob(jobId) {
       return advanceJob(jobId, "extract");
     },
+    async getActiveJob() {
+      return null;
+    },
 
     // Activities
     async getActivities() {
