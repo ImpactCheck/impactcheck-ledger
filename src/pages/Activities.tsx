@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 
-const UNIT_TYPES: UnitType[] = ["Money", "Weight", "Energy", "Distance", "Unknown"];
+const UNIT_TYPES: UnitType[] = ["Weight", "Energy", "Power", "Volume", "Area", "Distance", "Money", "Number", "Data", "Time", "WeightOverDistance", "ContainerOverDistance", "PassengerOverDistance", "AreaOverTime", "DataOverTime", "DistanceOverTime", "NumberOverTime", "WeightOverTime"];
 
 export default function Activities() {
   const navigate = useNavigate();
