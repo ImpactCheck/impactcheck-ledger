@@ -25,7 +25,6 @@ export default function Mapping() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [activeTab, setActiveTab] = useState(allRegions[0] ?? "all");
 
-  // Try to load existing estimates on mount
   const loadEstimates = useCallback(() => {
     api.getEstimates(projectId).then((est) => {
       setEstimates(est);
@@ -39,7 +38,6 @@ export default function Mapping() {
   const handleMapping = async () => {
     const initial = await api.startMapping(projectId);
     setJob(initial);
-
     pollRef.current = setInterval(async () => {
       const status = await api.getJob(initial.id);
       setJob(status);
@@ -61,14 +59,13 @@ export default function Mapping() {
     : estimates;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Emission Mapping</h1>
-        <p className="text-muted-foreground mt-1">Map activities to Climatiq emission factors.</p>
+        <p className="text-muted-foreground text-sm mt-0.5">Map activities to Climatiq emission factors.</p>
       </div>
 
-      {/* Run mapping */}
-      <Card>
+      <Card className="card-elevated border-0">
         <CardHeader>
           <CardTitle className="text-lg">Climatiq Factor Mapping</CardTitle>
           <CardDescription>Match each activity to emission factors and compute CO₂e estimates.</CardDescription>
@@ -87,33 +84,32 @@ export default function Mapping() {
                 </div>
               )}
               {jobDone && (
-                <div className="flex items-center gap-2 text-sm text-primary">
+                <div className="flex items-center gap-2 text-sm text-primary font-medium">
                   <Check className="h-4 w-4" /> Mapping complete
                 </div>
               )}
             </div>
           )}
           {!jobRunning && (
-            <Button onClick={handleMapping} className="gap-2" disabled={jobRunning}>
+            <Button onClick={handleMapping} className="gap-2 rounded-xl" disabled={jobRunning}>
               {hasEstimates ? "Re-run Mapping" : "Run Climatiq Mapping"}
             </Button>
           )}
           {jobRunning && (
-            <Button disabled className="gap-2">
+            <Button disabled className="gap-2 rounded-xl">
               <Loader2 className="h-4 w-4 animate-spin" /> Mapping…
             </Button>
           )}
         </CardContent>
       </Card>
 
-      {/* Estimates table */}
       {hasEstimates && (
         isMultiRegion ? (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="all">All</TabsTrigger>
+            <TabsList className="rounded-xl">
+              <TabsTrigger value="all" className="rounded-lg">All</TabsTrigger>
               {allRegions.map((r) => (
-                <TabsTrigger key={r} value={r}>{r.replace(/_/g, " ")}</TabsTrigger>
+                <TabsTrigger key={r} value={r} className="rounded-lg">{r.replace(/_/g, " ")}</TabsTrigger>
               ))}
             </TabsList>
             <TabsContent value={activeTab} className="mt-4">
@@ -125,12 +121,11 @@ export default function Mapping() {
         )
       )}
 
-      {/* Navigation */}
       <div className="flex justify-between">
-        <Button variant="outline" onClick={() => navigate("/activities")} className="gap-2">
+        <Button variant="outline" onClick={() => navigate("/activities")} className="gap-2 rounded-xl">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
-        <Button onClick={() => navigate("/report")} disabled={!hasEstimates} className="gap-2">
+        <Button onClick={() => navigate("/report")} disabled={!hasEstimates} className="gap-2 rounded-xl">
           Continue <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
@@ -140,7 +135,7 @@ export default function Mapping() {
 
 function EstimatesTable({ estimates }: { estimates: ActivityEstimate[] }) {
   return (
-    <Card>
+    <Card className="card-elevated border-0">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">Estimates</CardTitle>
         <CardDescription>{estimates.length} matched factors.</CardDescription>

@@ -21,10 +21,7 @@ export default function Activities() {
   const { project } = useProject();
   const projectId = project.currentProjectId ?? "prj_1";
 
-  const allRegions = [
-    project.primaryRegion,
-    ...project.comparisonRegions,
-  ].filter(Boolean);
+  const allRegions = [project.primaryRegion, ...project.comparisonRegions].filter(Boolean);
   const isMultiRegion = allRegions.length > 1;
 
   const [activities, setActivities] = useState<ExtractedActivity[]>([]);
@@ -77,7 +74,6 @@ export default function Activities() {
     URL.revokeObjectURL(url);
   };
 
-  // Filtering for multi-region tabs
   const filtered = isMultiRegion && activeRegionTab !== "all"
     ? activities.filter((a) => a.region === activeRegionTab)
     : activities;
@@ -86,28 +82,28 @@ export default function Activities() {
   const displayActivities = filtered.slice(0, topCount);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Activities</h1>
-          <p className="text-muted-foreground mt-1">Review and edit extracted emission-producing activities.</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Review and edit extracted emission-producing activities.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5">
+          <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5 rounded-xl">
             <Download className="h-3.5 w-3.5" /> Export CSV
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={!dirty || saving} className="gap-1.5">
+          <Button size="sm" onClick={handleSave} disabled={!dirty || saving} className="gap-1.5 rounded-xl">
             <Save className="h-3.5 w-3.5" /> Save edits
           </Button>
         </div>
       </div>
 
       {/* Top N badge */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         {isMultiRegion ? (
-          <Badge variant="outline" className="text-xs">Top {topCount} per region</Badge>
+          <Badge variant="outline" className="text-xs rounded-full">Top {topCount} per region</Badge>
         ) : (
-          <Badge variant="outline" className="text-xs">Top {topCount} selected</Badge>
+          <Badge variant="outline" className="text-xs rounded-full">Top {topCount} selected</Badge>
         )}
         <span className="text-xs text-muted-foreground">
           {activities.length} total activities · showing {displayActivities.length}
@@ -117,26 +113,18 @@ export default function Activities() {
       {/* Multi-region tabs */}
       {isMultiRegion ? (
         <Tabs value={activeRegionTab} onValueChange={setActiveRegionTab}>
-          <TabsList>
-            <TabsTrigger value="all">All</TabsTrigger>
+          <TabsList className="rounded-xl">
+            <TabsTrigger value="all" className="rounded-lg">All</TabsTrigger>
             {allRegions.map((r) => (
-              <TabsTrigger key={r} value={r}>{r.replace(/_/g, " ")}</TabsTrigger>
+              <TabsTrigger key={r} value={r} className="rounded-lg">{r.replace(/_/g, " ")}</TabsTrigger>
             ))}
           </TabsList>
           <TabsContent value={activeRegionTab} className="mt-4">
-            <ActivityTable
-              activities={displayActivities}
-              allRegions={allRegions}
-              onUpdate={updateField}
-            />
+            <ActivityTable activities={displayActivities} allRegions={allRegions} onUpdate={updateField} />
           </TabsContent>
         </Tabs>
       ) : (
-        <ActivityTable
-          activities={displayActivities}
-          allRegions={allRegions}
-          onUpdate={updateField}
-        />
+        <ActivityTable activities={displayActivities} allRegions={allRegions} onUpdate={updateField} />
       )}
 
       {/* CSV preview dialog */}
@@ -146,12 +134,12 @@ export default function Activities() {
             <DialogTitle>CSV Preview</DialogTitle>
             <DialogDescription>Preview of the exported CSV data.</DialogDescription>
           </DialogHeader>
-          <pre className="flex-1 overflow-auto rounded-md bg-secondary p-4 text-xs font-mono whitespace-pre">
+          <pre className="flex-1 overflow-auto rounded-xl bg-muted p-4 text-xs font-mono whitespace-pre">
             {csvPreview}
           </pre>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setCsvPreview(null)}>Close</Button>
-            <Button size="sm" onClick={downloadCsv} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => setCsvPreview(null)} className="rounded-xl">Close</Button>
+            <Button size="sm" onClick={downloadCsv} className="gap-1.5 rounded-xl">
               <Download className="h-3.5 w-3.5" /> Download
             </Button>
           </div>
@@ -160,10 +148,10 @@ export default function Activities() {
 
       {/* Navigation */}
       <div className="flex justify-between">
-        <Button variant="outline" onClick={() => navigate("/upload")} className="gap-2">
+        <Button variant="outline" onClick={() => navigate("/upload")} className="gap-2 rounded-xl">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
-        <Button onClick={() => navigate("/mapping")} className="gap-2">
+        <Button onClick={() => navigate("/mapping")} className="gap-2 rounded-xl">
           Continue <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
@@ -183,7 +171,7 @@ function ActivityTable({
   onUpdate: (id: string, field: keyof ExtractedActivity, value: string | number | undefined) => void;
 }) {
   return (
-    <Card>
+    <Card className="card-elevated border-0">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">Activity Log</CardTitle>
         <CardDescription>{activities.length} activities shown.</CardDescription>
@@ -192,68 +180,41 @@ function ActivityTable({
         <div className="space-y-3">
           {activities.map((act) => (
             <Collapsible key={act.id}>
-              <div className="rounded-md border p-3 space-y-2">
-                {/* Row 1: text */}
+              <div className="rounded-xl bg-muted/40 p-3 space-y-2 hover:bg-muted/60 transition-colors">
                 <Textarea
                   value={act.text}
                   onChange={(e) => onUpdate(act.id, "text", e.target.value)}
-                  className="min-h-[2.5rem] text-sm resize-none"
+                  className="min-h-[2.5rem] text-sm resize-none bg-card"
                   rows={1}
                 />
-
-                {/* Row 2: dropdowns + meta */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <Select
-                    value={act.unit_type ?? ""}
-                    onValueChange={(v) => onUpdate(act.id, "unit_type", v || undefined)}
-                  >
-                    <SelectTrigger className="w-[130px] h-8 text-xs">
-                      <SelectValue placeholder="Unit type" />
-                    </SelectTrigger>
+                  <Select value={act.unit_type ?? ""} onValueChange={(v) => onUpdate(act.id, "unit_type", v || undefined)}>
+                    <SelectTrigger className="w-[130px] h-8 text-xs rounded-lg"><SelectValue placeholder="Unit type" /></SelectTrigger>
                     <SelectContent>
-                      {UNIT_TYPES.map((ut) => (
-                        <SelectItem key={ut} value={ut}>{ut}</SelectItem>
-                      ))}
+                      {UNIT_TYPES.map((ut) => <SelectItem key={ut} value={ut}>{ut}</SelectItem>)}
                     </SelectContent>
                   </Select>
-
                   {allRegions.length > 0 && (
-                    <Select
-                      value={act.region ?? ""}
-                      onValueChange={(v) => onUpdate(act.id, "region", v || undefined)}
-                    >
-                      <SelectTrigger className="w-[160px] h-8 text-xs">
-                        <SelectValue placeholder="Region" />
-                      </SelectTrigger>
+                    <Select value={act.region ?? ""} onValueChange={(v) => onUpdate(act.id, "region", v || undefined)}>
+                      <SelectTrigger className="w-[160px] h-8 text-xs rounded-lg"><SelectValue placeholder="Region" /></SelectTrigger>
                       <SelectContent>
-                        {allRegions.map((r) => (
-                          <SelectItem key={r} value={r}>{r.replace(/_/g, " ")}</SelectItem>
-                        ))}
+                        {allRegions.map((r) => <SelectItem key={r} value={r}>{r.replace(/_/g, " ")}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   )}
-
                   {act.quantity != null && act.unit && (
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {act.quantity.toLocaleString()} {act.unit}
-                    </span>
+                    <span className="text-xs text-muted-foreground font-mono">{act.quantity.toLocaleString()} {act.unit}</span>
                   )}
-
                   <span className="ml-auto text-[10px] text-muted-foreground font-mono">{act.id}</span>
-
                   {act.sourceDocumentId && (
                     <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]">
-                        Details
-                      </Button>
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] rounded-lg">Details</Button>
                     </CollapsibleTrigger>
                   )}
                 </div>
-
-                {/* Collapsible details */}
                 {act.sourceDocumentId && (
                   <CollapsibleContent>
-                    <div className="rounded bg-secondary/50 p-2 text-xs text-muted-foreground space-y-1 mt-1">
+                    <div className="rounded-lg bg-card p-2.5 text-xs text-muted-foreground space-y-1 mt-1">
                       <p><span className="font-medium text-foreground">Source:</span> {act.sourceDocumentId}</p>
                       {act.note && <p><span className="font-medium text-foreground">Note:</span> {act.note}</p>}
                     </div>

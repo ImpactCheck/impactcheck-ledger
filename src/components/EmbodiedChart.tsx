@@ -7,7 +7,7 @@ interface EmbodiedChartProps {
   concreteCarbon: number;
 }
 
-const COLORS = ["hsl(145 55% 42%)", "hsl(145 45% 55%)", "hsl(145 55% 32%)"];
+const COLORS = ["hsl(152 52% 40%)", "hsl(152 40% 52%)", "hsl(154 50% 28%)"];
 
 export function EmbodiedChart({ gpuCarbon, coolingCarbon, concreteCarbon }: EmbodiedChartProps) {
   const data = [
@@ -17,7 +17,7 @@ export function EmbodiedChart({ gpuCarbon, coolingCarbon, concreteCarbon }: Embo
   ];
 
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
+    <div className="rounded-xl border bg-card p-4 space-y-3 card-elevated">
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Bucket A — The Build</h3>
         <p className="text-xs text-muted-foreground">Embodied Carbon Debt</p>
@@ -25,15 +25,14 @@ export function EmbodiedChart({ gpuCarbon, coolingCarbon, concreteCarbon }: Embo
       <div className="h-[240px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 20%)" />
-            <XAxis dataKey="name" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatTonnes(v)} />
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <XAxis dataKey="name" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatTonnes(v)} />
             <Tooltip
-              contentStyle={{ backgroundColor: "hsl(220 18% 13%)", border: "1px solid hsl(220 15% 20%)", borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: "hsl(210 20% 90%)" }}
+              contentStyle={{ backgroundColor: "hsl(0 0% 100%)", border: "1px solid hsl(40 15% 90%)", borderRadius: 12, fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
               formatter={(value: number) => [`${formatTonnes(value)} tonnes CO₂e`, ""]}
             />
-            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="value" radius={[6, 6, 0, 0]}>
               {data.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
             </Bar>
           </BarChart>
