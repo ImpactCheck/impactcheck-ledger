@@ -1,17 +1,59 @@
 import { useProject } from "@/contexts/ProjectContext";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
+import { api } from "@/api";
+import { Badge } from "@/components/ui/badge";
 
-const REGIONS = ["Texas (ERCOT)", "Norway (Hydro)", "Virginia (PJM)", "California (CAISO)", "Iceland (Geothermal)"];
+const REGIONS = [
+  { value: "texas_ercot", label: "Texas (ERCOT — 380 g/kWh)" },
+  { value: "norway_hydro", label: "Norway (Hydro — 10 g/kWh)" },
+  { value: "virginia_pjm", label: "Virginia (PJM — 310 g/kWh)" },
+  { value: "iowa_miso", label: "Iowa (MISO — 420 g/kWh)" },
+  { value: "iceland_geo", label: "Iceland (Geothermal — 15 g/kWh)" },
+  { value: "singapore", label: "Singapore (408 g/kWh)" },
+];
 
 export default function Setup() {
   const { project, updateProject } = useProject();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+
+  const toggleComparison = (region: string) => {
+    const current = project.comparisonRegions;
+    if (current.includes(region)) {
+      updateProject({ comparisonRegions: current.filter((r) => r !== region) });
+    } else {
+      updateProject({ comparisonRegions: [...current, region] });
+    }
+  };
+
+  const handleCreate = async () => {
+    setLoading(true);
+    try {
+      const created = await api.createProject({
+        name: project.projectName,
+        year: project.year,
+        companyType: project.companyType === "ai_infra" ? "ai_infra" : "other",
+        primaryRegion: project.primaryRegion,
+        comparisonRegions: project.comparisonRegions,
+      });
+      updateProject({
+        currentProjectId: created.id,
+        regions: [project.primaryRegion, ...project.comparisonRegions],
+      });
+      navigate("/upload");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const canCreate = project.projectName.trim() && project.primaryRegion;
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -38,10 +80,7 @@ export default function Setup() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Reporting Year</Label>
-              <Select
-                value={String(project.year)}
-                onValueChange={(v) => updateProject({ year: Number(v) })}
-              >
+              <Select value={String(project.year)} onValueChange={(v) => updateProject({ year: Number(v) })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {[2024, 2025, 2026, 2027].map((y) => (
@@ -53,10 +92,7 @@ export default function Setup() {
 
             <div className="space-y-2">
               <Label>Company Type</Label>
-              <Select
-                value={project.companyType}
-                onValueChange={(v) => updateProject({ companyType: v as any })}
-              >
+              <Select value={project.companyType} onValueChange={(v) => updateProject({ companyType: v as any })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ai_infra">AI Infrastructure</SelectItem>
@@ -69,25 +105,53 @@ export default function Setup() {
           </div>
 
           <div className="space-y-2">
-            <Label>Region(s)</Label>
-            <Select
-              value={project.regions[0] || ""}
-              onValueChange={(v) => updateProject({ regions: [v] })}
-            >
+            <Label>Primary Region</Label>
+            <Select value={project.primaryRegion} onValueChange={(v) => updateProject({ primaryRegion: v })}>
               <SelectTrigger><SelectValue placeholder="Select primary region" /></SelectTrigger>
               <SelectContent>
                 {REGIONS.map((r) => (
-                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Comparison Regions (optional)</Label>
+            <div className="flex flex-wrap gap-2">
+              {REGIONS.filter((r) => r.value !== project.primaryRegion).map((r) => (
+                <Badge
+                  key={r.value}
+                  variant={project.comparisonRegions.includes(r.value) ? "default" : "outline"}
+                  className="cursor-pointer select-none"
+                  onClick={() => toggleComparison(r.value)}
+                >
+                  {r.label.split(" (")[0]}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Baseline Footprint (kg CO₂e, optional)</Label>
+            <Input
+              type="number"
+              value={project.baselineFootprintKgCO2e ?? ""}
+              onChange={(e) =>
+                updateProject({
+                  baselineFootprintKgCO2e: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+              placeholder="e.g. 1200000"
+            />
           </div>
         </CardContent>
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={() => navigate("/upload")} className="gap-2">
-          Continue <ArrowRight className="h-4 w-4" />
+        <Button onClick={handleCreate} disabled={!canCreate || loading} className="gap-2">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Create Project <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
     </div>
