@@ -6,8 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
 import type { Document } from "@/contracts/impactcheck.v2";
-import JobProgressCard from "@/components/JobProgressCard";
-import { useJobPoller } from "@/hooks/useJobPoller";
 
 export default function Upload() {
   const navigate = useNavigate();
@@ -17,11 +15,6 @@ export default function Upload() {
   const [docs, setDocs] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const { job, start: startExtract, isRunning: extractRunning } = useJobPoller({
-    projectId,
-    jobType: "extract",
-  });
 
   const loadDocs = useCallback(() => {
     api.listDocuments(projectId).then(setDocs);
@@ -41,15 +34,10 @@ export default function Upload() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleExtract = () => startExtract(() => api.startExtract(projectId));
-
   const fileIcon = (ft: string) => {
     if (ft === "csv" || ft === "xlsx") return <FileSpreadsheet className="h-4 w-4 text-primary" />;
     return <FileTextIcon className="h-4 w-4 text-primary" />;
   };
-
-  const extractDone = job?.status === "succeeded";
-  const extractFailed = job?.status === "failed";
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in-up">
@@ -136,36 +124,13 @@ export default function Upload() {
         </Card>
       )}
 
-      {/* Extraction */}
-      {docs.length > 0 && (
-        <Card className="card-elevated border-0">
-          <CardHeader>
-            <CardTitle className="text-lg">Extract Activities</CardTitle>
-            <CardDescription>Parse uploaded documents to extract carbon-relevant line items.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {job && <JobProgressCard job={job} type="extract" />}
-            {!extractRunning && !extractDone && (
-              <Button onClick={handleExtract} className="gap-2 rounded-xl" disabled={extractRunning}>
-                Run Extraction
-              </Button>
-            )}
-            {extractRunning && (
-              <Button disabled className="gap-2 rounded-xl">
-                <Loader2 className="h-4 w-4 animate-spin" /> Extracting…
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Navigation */}
       <div className="flex justify-between">
         <Button variant="outline" onClick={() => navigate("/setup")} className="gap-2 rounded-xl">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
-        <Button onClick={() => navigate("/activities")} disabled={!extractDone} className="gap-2 rounded-xl">
-          Go to Activities <ArrowRight className="h-4 w-4" />
+        <Button onClick={() => navigate("/activities")} disabled={docs.length === 0} className="gap-2 rounded-xl">
+          Continue <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
     </div>
