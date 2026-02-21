@@ -4,7 +4,7 @@ Pipeline: Search (find activity_id) → Estimate (calculate CO2e)
 
 Usage:
   export CLIMATIQ_API_KEY="your-key-here"
-  python test_climatiq_free.py
+  python climatiq_api_test.py
 """
 
 import os, csv, json, io, time
@@ -40,7 +40,7 @@ PARAM_MAP = {
 }
 
 
-def search(query: str, unit_type: str, region: str = None) -> dict | None:
+def search(query: str, unit_type: str, region: str | None = None) -> dict | None:
     """Search for emission factors. Returns the top result or None."""
     params = {
         "query": query,
