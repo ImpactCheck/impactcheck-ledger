@@ -67,6 +67,14 @@ export function createSupabaseAdapter(): ImpactcheckClient {
       return (data || []).map(mapProject);
     },
 
+    async deleteProject(projectId) {
+      const { error } = await supabase
+        .from("projects")
+        .delete()
+        .eq("id", projectId);
+      if (error) throw error;
+    },
+
     // ─── Documents ─────────────────────────────────────────
     async uploadDocument(projectId, file) {
       const storagePath = `${projectId}/${Date.now()}_${file.name}`;

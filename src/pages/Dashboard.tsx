@@ -5,9 +5,11 @@ import { useProject } from "@/contexts/ProjectContext";
 import type { Project } from "@/contracts/impactcheck.v2";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Leaf, Plus, MapPin, Calendar, Building2, ArrowRight, Sun, Moon } from "lucide-react";
+import { Leaf, Plus, MapPin, Calendar, Building2, ArrowRight, Sun, Moon, Trash2 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { formatTonnes } from "@/contracts/impactcheck.v2";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 const REGION_LABELS: Record<string, string> = {
   texas_ercot: "Texas (ERCOT)",
@@ -27,6 +29,17 @@ export default function Dashboard() {
   useEffect(() => {
     api.listProjects().then(setProjects);
   }, []);
+
+  const handleDelete = async (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    try {
+      await api.deleteProject(projectId);
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+      toast.success("Project deleted");
+    } catch {
+      toast.error("Failed to delete project");
+    }
+  };
 
   const openProject = (proj: Project) => {
     updateProject({
@@ -154,7 +167,37 @@ export default function Dashboard() {
                       </span>
                     </div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
+                  <div className="flex items-center gap-1 shrink-0 mt-1">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-7 w-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
+                          aria-label="Delete project"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete "{proj.name}"?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete this project and all its data (documents, activities, estimates, and recommendations). This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={(e) => handleDelete(e, proj.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3 mt-4 pt-3 border-t border-border">
