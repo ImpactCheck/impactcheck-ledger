@@ -157,6 +157,21 @@ serve(async (req) => {
             }
           }
 
+          // Strategy 4: LLM-assisted unit conversion
+          const allValidTypes = [...new Set([...validTypes1, ...validTypes2])];
+          if (allValidTypes.length > 0) {
+            const llmParams = await llmConvertUnits(act, allValidTypes);
+            if (llmParams) {
+              retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, llmParams, region);
+              if (retryResult.error) retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, llmParams, null);
+              if (!retryResult.error) {
+                console.log(`LLM conversion succeeded for ${searchResult.factor.activity_id}`);
+                estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.5));
+                continue;
+              }
+            }
+          }
+
           console.error(`Estimate failed for ${searchResult.factor.activity_id}:`, retryResult?.error || estimateResult.error);
           estimates.push(fallbackEstimate(projectId, act, searchResult.factor, searchResult.confidence * 0.5));
         } else {
@@ -455,6 +470,73 @@ function adaptParametersToValidTypes(act: any, validTypes: string[]): any | null
     if (lt === "area") return { area: qty, area_unit: act.unit || "m2" };
   }
   return null;
+}
+
+// ─── LLM-assisted unit conversion ───────────────────────
+
+async function llmConvertUnits(act: any, validUnitTypes: string[]): Promise<any | null> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) return null;
+
+  const prompt = `You are an expert in carbon accounting unit conversions.
+
+An activity needs a CO2 emission estimate but Climatiq rejected the unit type.
+
+Activity details:
+- Text: "${act.text}"
+- Original unit type: "${act.unit_type || "Unknown"}"
+- Quantity: ${act.quantity ?? "null"}
+- Unit: "${act.unit || "not specified"}"
+- Amount (money): ${act.amount ?? "null"}
+- Currency: "${act.currency || "not specified"}"
+
+Climatiq requires one of these unit types: ${JSON.stringify(validUnitTypes)}
+
+Convert the activity data into Climatiq API parameters using one of the valid unit types.
+Use reasonable engineering assumptions if needed (e.g. solar panel capacity → annual energy output in kWh, passenger flight → passenger-km, container shipping → container-km).
+
+Respond ONLY with a JSON object containing the Climatiq parameters. Examples:
+- For "Power" type: {"energy": 8760, "energy_unit": "kWh"} (1 kW * 8760 hours/year)
+- For "PassengerOverDistance": {"passengers": 1, "distance": 1000, "distance_unit": "km"}
+- For "ContainerOverDistance": {"containers": 1, "distance": 1000, "distance_unit": "km"}
+- For "WeightOverDistance": {"weight": 1000, "weight_unit": "kg", "distance": 100, "distance_unit": "km"}
+
+Respond with ONLY the JSON object, no explanation.`;
+
+  try {
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+      }),
+    });
+
+    if (!resp.ok) {
+      console.error("LLM conversion call failed:", resp.status);
+      return null;
+    }
+
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (!content) return null;
+
+    // Extract JSON from response (handle markdown code blocks)
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const params = JSON.parse(jsonMatch[0]);
+    console.log(`LLM converted "${act.text}" (${act.unit_type}) → ${JSON.stringify(params)}`);
+    return params;
+  } catch (err) {
+    console.error("LLM unit conversion error:", err);
+    return null;
+  }
 }
 
 // ─── Stub mode ──────────────────────────────────────────
