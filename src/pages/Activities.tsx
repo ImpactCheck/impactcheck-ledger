@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Save, Download, Check, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Save, Download, Check, X, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/api";
@@ -13,6 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
+import JobProgressCard from "@/components/JobProgressCard";
+import { useJobPoller } from "@/hooks/useJobPoller";
 
 const UNIT_TYPES: UnitType[] = ["Weight", "Energy", "Power", "Volume", "Area", "Distance", "Money", "Number", "Data", "Time", "WeightOverDistance", "ContainerOverDistance", "PassengerOverDistance", "AreaOverTime", "DataOverTime", "DistanceOverTime", "NumberOverTime", "WeightOverTime"];
 
@@ -38,6 +40,16 @@ export default function Activities() {
   }, [projectId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const { job, start: startExtract, isRunning: extractRunning } = useJobPoller({
+    projectId,
+    jobType: "extract",
+    onSuccess: load,
+  });
+
+  const handleExtract = () => startExtract(() => api.startExtract(projectId));
+  const extractDone = job?.status === "succeeded";
+  const extractFailed = job?.status === "failed";
 
   const updateField = (id: string, field: keyof ExtractedActivity, value: string | number | undefined) => {
     setActivities((prev) =>
@@ -80,51 +92,83 @@ export default function Activities() {
 
   const topCount = isMultiRegion ? 50 : 100;
   const displayActivities = filtered.slice(0, topCount);
+  const hasActivities = activities.length > 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Activities</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Review and edit extracted emission-producing activities.</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Extract and review emission-producing activities from your documents.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5 rounded-xl">
-            <Download className="h-3.5 w-3.5" /> Export CSV
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={!dirty || saving} className="gap-1.5 rounded-xl">
-            <Save className="h-3.5 w-3.5" /> Save edits
-          </Button>
-        </div>
-      </div>
-
-      {/* Top N badge */}
-      <div className="flex items-center gap-3">
-        {isMultiRegion ? (
-          <Badge variant="outline" className="text-xs rounded-full">Top {topCount} per region</Badge>
-        ) : (
-          <Badge variant="outline" className="text-xs rounded-full">Top {topCount} selected</Badge>
+        {hasActivities && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5 rounded-xl">
+              <Download className="h-3.5 w-3.5" /> Export CSV
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={!dirty || saving} className="gap-1.5 rounded-xl">
+              <Save className="h-3.5 w-3.5" /> Save edits
+            </Button>
+          </div>
         )}
-        <span className="text-xs text-muted-foreground">
-          {activities.length} total activities · showing {displayActivities.length}
-        </span>
       </div>
 
-      {/* Multi-region tabs */}
-      {isMultiRegion ? (
-        <Tabs value={activeRegionTab} onValueChange={setActiveRegionTab}>
-          <TabsList className="rounded-xl">
-            <TabsTrigger value="all" className="rounded-lg">All</TabsTrigger>
-            {allRegions.map((r) => (
-              <TabsTrigger key={r} value={r} className="rounded-lg">{r.replace(/_/g, " ")}</TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent value={activeRegionTab} className="mt-4">
+      {/* Extraction card */}
+      <Card className="card-elevated border-0">
+        <CardHeader>
+          <CardTitle className="text-lg">Extract Activities</CardTitle>
+          <CardDescription>Parse uploaded documents to extract carbon-relevant line items.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {job && <JobProgressCard job={job} type="extract" />}
+          {!extractRunning && !extractDone && (
+            <Button onClick={handleExtract} className="gap-2 rounded-xl" disabled={extractRunning}>
+              {hasActivities ? "Re-run Extraction" : "Run Extraction"}
+            </Button>
+          )}
+          {extractRunning && (
+            <Button disabled className="gap-2 rounded-xl">
+              <Loader2 className="h-4 w-4 animate-spin" /> Extracting…
+            </Button>
+          )}
+          {extractDone && (
+            <p className="text-sm text-muted-foreground">✓ Extraction completed — {activities.length} activities found.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Activity list */}
+      {hasActivities && (
+        <>
+          {/* Top N badge */}
+          <div className="flex items-center gap-3">
+            {isMultiRegion ? (
+              <Badge variant="outline" className="text-xs rounded-full">Top {topCount} per region</Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs rounded-full">Top {topCount} selected</Badge>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {activities.length} total activities · showing {displayActivities.length}
+            </span>
+          </div>
+
+          {/* Multi-region tabs */}
+          {isMultiRegion ? (
+            <Tabs value={activeRegionTab} onValueChange={setActiveRegionTab}>
+              <TabsList className="rounded-xl">
+                <TabsTrigger value="all" className="rounded-lg">All</TabsTrigger>
+                {allRegions.map((r) => (
+                  <TabsTrigger key={r} value={r} className="rounded-lg">{r.replace(/_/g, " ")}</TabsTrigger>
+                ))}
+              </TabsList>
+              <TabsContent value={activeRegionTab} className="mt-4">
+                <ActivityTable activities={displayActivities} allRegions={allRegions} onUpdate={updateField} />
+              </TabsContent>
+            </Tabs>
+          ) : (
             <ActivityTable activities={displayActivities} allRegions={allRegions} onUpdate={updateField} />
-          </TabsContent>
-        </Tabs>
-      ) : (
-        <ActivityTable activities={displayActivities} allRegions={allRegions} onUpdate={updateField} />
+          )}
+        </>
       )}
 
       {/* CSV preview dialog */}
@@ -151,14 +195,13 @@ export default function Activities() {
         <Button variant="outline" onClick={() => navigate("/upload")} className="gap-2 rounded-xl">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
-        <Button onClick={() => navigate("/mapping")} className="gap-2 rounded-xl">
+        <Button onClick={() => navigate("/mapping")} disabled={!hasActivities} className="gap-2 rounded-xl">
           Continue <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
     </div>
   );
 }
-
 /* ─── Editable Activity Table ──────────────────────────────────────── */
 
 function ActivityTable({
