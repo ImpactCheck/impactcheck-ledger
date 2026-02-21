@@ -36,10 +36,10 @@ export default function DashboardLayout() {
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 hidden md:flex flex-col bg-sidebar border-r border-sidebar-border sticky top-0 h-screen">
+      <aside className="w-[272px] shrink-0 hidden md:flex flex-col bg-sidebar border-r border-sidebar-border sticky top-0 h-screen">
         {/* Logo */}
-        <div className="px-6 py-5 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-green flex items-center justify-center">
+        <div className="px-6 py-6 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-2xl bg-gradient-green flex items-center justify-center shadow-md">
             <Leaf className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
@@ -53,14 +53,14 @@ export default function DashboardLayout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        <nav className="flex-1 px-4 py-4 overflow-y-auto">
           {/* Back to dashboard */}
           <button
             onClick={() => navigate("/")}
-            className="w-full flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all mb-4"
+            className="w-full flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all mb-5"
           >
-            <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-muted text-muted-foreground">
-              <LayoutDashboard className="h-3.5 w-3.5" />
+            <div className="flex items-center justify-center h-8 w-8 rounded-xl bg-muted text-muted-foreground">
+              <LayoutDashboard className="h-4 w-4" />
             </div>
             <span>All Projects</span>
           </button>
@@ -68,7 +68,7 @@ export default function DashboardLayout() {
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-3 mb-3">
             Workflow
           </p>
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {visibleSteps.map((step, idx) => {
               const isActive = idx === currentIdx;
               const isCompleted = currentIdx > idx;
@@ -79,28 +79,28 @@ export default function DashboardLayout() {
                   key={step.path}
                   onClick={() => navigate(step.path)}
                   className={cn(
-                    "w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all text-left group",
-                    isActive && "bg-primary text-primary-foreground shadow-md",
+                    "w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-[13px] font-medium transition-all text-left group",
+                    isActive && "bg-primary text-primary-foreground shadow-lg",
                     isCompleted && !isActive && "text-foreground hover:bg-muted",
                     !isActive && !isCompleted && "text-muted-foreground hover:text-foreground hover:bg-muted"
                   )}
                 >
                   <div
                     className={cn(
-                      "flex items-center justify-center h-7 w-7 rounded-lg text-xs shrink-0 transition-colors",
+                      "flex items-center justify-center h-8 w-8 rounded-xl text-xs shrink-0 transition-colors",
                       isActive && "bg-primary-foreground/20 text-primary-foreground",
                       isCompleted && !isActive && "bg-primary/10 text-primary",
                       !isActive && !isCompleted && "bg-muted text-muted-foreground"
                     )}
                   >
                     {isCompleted && !isActive ? (
-                      <Check className="h-3.5 w-3.5" />
+                      <Check className="h-4 w-4" />
                     ) : (
-                      <StepIcon className="h-3.5 w-3.5" />
+                      <StepIcon className="h-4 w-4" />
                     )}
                   </div>
                   <span className="flex-1">{step.label}</span>
-                  {isActive && <ChevronRight className="h-3.5 w-3.5 opacity-60" />}
+                  {isActive && <ChevronRight className="h-4 w-4 opacity-60" />}
                 </button>
               );
             })}
@@ -108,23 +108,23 @@ export default function DashboardLayout() {
         </nav>
 
         {/* Bottom section */}
-        <div className="px-4 py-3 border-t border-sidebar-border space-y-3">
+        <div className="px-4 py-4 border-t border-sidebar-border space-y-3">
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
-            className="w-full flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            className="w-full flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
           >
-            <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-muted text-muted-foreground">
-              {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            <div className="flex items-center justify-center h-8 w-8 rounded-xl bg-muted text-muted-foreground">
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </div>
             <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
           </button>
 
-          {/* Project info */}
-          <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Project</p>
+          {/* Project info card */}
+          <div className="rounded-2xl bg-muted/60 px-4 py-3.5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Project</p>
             <p className="text-sm font-semibold text-foreground truncate">{project.projectName}</p>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1.5">
               <span className="text-[10px] text-muted-foreground font-mono">{project.year}</span>
               {project.primaryRegion && (
                 <span className="text-[10px] text-muted-foreground">{project.primaryRegion?.replace(/_/g, " ")}</span>
