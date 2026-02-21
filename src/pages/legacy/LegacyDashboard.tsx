@@ -4,7 +4,6 @@ import { HeroMetrics } from "@/components/HeroMetrics";
 import { AuditInputPanel } from "@/components/AuditInputPanel";
 import { EmbodiedChart } from "@/components/EmbodiedChart";
 import { OperationalChart } from "@/components/OperationalChart";
-import { AuditCertificate } from "@/components/AuditCertificate";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Settings2, Leaf } from "lucide-react";
@@ -28,7 +27,7 @@ const LegacyDashboard = () => {
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground border rounded px-1.5 py-0.5 ml-1">Legacy</span>
           </div>
           <div className="flex items-center gap-2">
-            <AuditCertificate inputs={inputs} />
+            {/* AuditCertificate removed — legacy view */}
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="outline" size="icon" className="lg:hidden">

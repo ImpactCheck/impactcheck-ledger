@@ -1,10 +1,23 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Upload as UploadIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload as UploadIcon, FileSpreadsheet, FileText as FileTextIcon, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { api } from "@/api";
+import type { Document } from "@/contracts/impactcheck.v2";
 
 export default function Upload() {
   const navigate = useNavigate();
+  const [docs, setDocs] = useState<Document[]>([]);
+
+  useEffect(() => {
+    api.listDocuments("prj_1").then(setDocs);
+  }, []);
+
+  const fileIcon = (ft: string) => {
+    if (ft === "csv" || ft === "xlsx") return <FileSpreadsheet className="h-4 w-4 text-primary" />;
+    return <FileTextIcon className="h-4 w-4 text-primary" />;
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -26,6 +39,31 @@ export default function Upload() {
           </div>
         </CardContent>
       </Card>
+
+      {docs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Uploaded Documents</CardTitle>
+            <CardDescription>{docs.length} file(s) ready</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {docs.map((doc) => (
+                <div key={doc.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    {fileIcon(doc.fileType)}
+                    <span className="font-mono">{doc.filename}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Check className="h-3.5 w-3.5 text-primary" />
+                    {doc.status}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={() => navigate("/setup")} className="gap-2">

@@ -1,25 +1,145 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { api } from "@/api";
+import type { Report as ReportType } from "@/contracts/impactcheck.v2";
+import { formatTonnes } from "@/contracts/impactcheck.v2";
+import { ComplianceBadge } from "@/components/ComplianceBadge";
+import { AuditCertificate } from "@/components/AuditCertificate";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+
+const CATEGORY_COLORS = [
+  "hsl(145 63% 42%)",
+  "hsl(200 70% 50%)",
+  "hsl(30 80% 55%)",
+  "hsl(280 60% 55%)",
+  "hsl(350 70% 55%)",
+  "hsl(60 70% 45%)",
+];
 
 export default function Report() {
   const navigate = useNavigate();
+  const [report, setReport] = useState<ReportType | null>(null);
+
+  useEffect(() => {
+    api.getReport("prj_1").then(setReport);
+  }, []);
+
+  if (!report) return null;
+
+  const primaryRegion = Object.keys(report.totalsByRegion)[0] ?? "";
+  const primaryTotal = report.totalsByRegion[primaryRegion] ?? 0;
+  const categories = report.categoryBreakdownByRegion?.[primaryRegion] ?? [];
+
+  const regionCompareData = Object.entries(report.totalsByRegion).map(
+    ([region, total]) => ({ region, total })
+  );
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Carbon Report</h1>
-        <p className="text-muted-foreground mt-1">Review your full lifecycle carbon assessment.</p>
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Carbon Report</h1>
+          <p className="text-muted-foreground mt-1">Full lifecycle carbon assessment.</p>
+        </div>
+        <AuditCertificate report={report} projectName="Abilene DC Expansion" primaryRegion={primaryRegion} />
       </div>
 
+      {/* Hero total */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Lifecycle Carbon — {primaryRegion}</p>
+              <p className="text-4xl font-bold font-mono text-gradient-green mt-1">{formatTonnes(primaryTotal)} <span className="text-lg text-muted-foreground font-normal">tonnes CO₂e</span></p>
+              {report.deltaVsBaselineKg !== undefined && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {report.deltaVsBaselineKg > 0 ? "+" : ""}{formatTonnes(report.deltaVsBaselineKg)} t vs. baseline
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <ComplianceBadge level={report.compliance.us.status} />
+              <ComplianceBadge level={report.compliance.eu.status} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Category breakdown */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Category Breakdown</CardTitle>
+            <CardDescription>Emissions by category for {primaryRegion}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categories} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 20%)" />
+                  <XAxis dataKey="category" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatTonnes(v)} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(220 18% 13%)", border: "1px solid hsl(220 15% 20%)", borderRadius: 8, fontSize: 12 }}
+                    formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
+                  />
+                  <Bar dataKey="co2eKg" radius={[4, 4, 0, 0]}>
+                    {categories.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Region comparison */}
+        {regionCompareData.length > 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Region Comparison</CardTitle>
+              <CardDescription>Total CO₂e by region</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={regionCompareData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 20%)" />
+                    <XAxis dataKey="region" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatTonnes(v)} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(220 18% 13%)", border: "1px solid hsl(220 15% 20%)", borderRadius: 8, fontSize: 12 }}
+                      formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
+                    />
+                    <Bar dataKey="total" radius={[4, 4, 0, 0]} fill="hsl(145 63% 42%)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Hotspots */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Report Summary</CardTitle>
-          <CardDescription>Embodied + Operational carbon breakdown.</CardDescription>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            Top Hotspots
+          </CardTitle>
+          <CardDescription>Highest-emission activities requiring attention.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">Report generation coming soon. Continue to recommendations.</p>
+          <div className="space-y-2">
+            {report.hotspots.map((h, i) => (
+              <div key={i} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                <span>{h.text}</span>
+                <span className="font-mono font-bold">{formatTonnes(h.co2eKg)} t</span>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

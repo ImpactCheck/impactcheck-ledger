@@ -1,5 +1,5 @@
 import { ComplianceBadge } from "./ComplianceBadge";
-import { formatTonnes, formatNumber } from "@/lib/carbon-calculations";
+import { formatTonnes, formatNumber } from "@/contracts/impactcheck.v2";
 import { Activity, Factory, Zap, BarChart3 } from "lucide-react";
 
 interface HeroMetricsProps {
