@@ -17,6 +17,8 @@ export type Database = {
       activities: {
         Row: {
           amount: number | null
+          category: string | null
+          confidence: string | null
           created_at: string
           currency: string | null
           id: string
@@ -24,13 +26,17 @@ export type Database = {
           project_id: string
           quantity: number | null
           region: string | null
+          search_query: string | null
           source_document_id: string | null
+          source_page: string | null
           text: string
           unit: string | null
           unit_type: string | null
         }
         Insert: {
           amount?: number | null
+          category?: string | null
+          confidence?: string | null
           created_at?: string
           currency?: string | null
           id?: string
@@ -38,13 +44,17 @@ export type Database = {
           project_id: string
           quantity?: number | null
           region?: string | null
+          search_query?: string | null
           source_document_id?: string | null
+          source_page?: string | null
           text: string
           unit?: string | null
           unit_type?: string | null
         }
         Update: {
           amount?: number | null
+          category?: string | null
+          confidence?: string | null
           created_at?: string
           currency?: string | null
           id?: string
@@ -52,7 +62,9 @@ export type Database = {
           project_id?: string
           quantity?: number | null
           region?: string | null
+          search_query?: string | null
           source_document_id?: string | null
+          source_page?: string | null
           text?: string
           unit?: string | null
           unit_type?: string | null
