@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, AlertTriangle, Printer } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { api } from "@/api";
@@ -42,8 +42,11 @@ export default function Report() {
   }, [projectId]);
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <p className="text-muted-foreground">Loading report…</p>
+    <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+        <Loader2 className="h-5 w-5 text-primary animate-spin" />
+      </div>
+      <p className="text-sm text-muted-foreground">Building your carbon report…</p>
     </div>
   );
 
@@ -78,6 +81,7 @@ export default function Report() {
       {/* Header */}
       <div className="flex items-center justify-between print:hidden">
         <div>
+          <p className="step-number mb-1">Step 5</p>
           <h1 className="text-2xl font-bold tracking-tight">Carbon Report</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Full lifecycle carbon assessment.</p>
         </div>

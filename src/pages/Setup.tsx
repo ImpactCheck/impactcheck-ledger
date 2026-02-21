@@ -60,14 +60,10 @@ export default function Setup() {
   return (
     <div className="max-w-2xl mx-auto space-y-8 animate-fade-in-up">
       {/* Page header */}
-      <div className="flex items-center gap-4">
-        
-
-
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Project Setup</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Configure your carbon audit project parameters.</p>
-        </div>
+      <div>
+        <p className="step-number mb-1">Step 1</p>
+        <h1 className="text-2xl font-bold tracking-tight">Project Setup</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">Configure your carbon audit project parameters.</p>
       </div>
 
       <Card className="card-elevated border-0">
