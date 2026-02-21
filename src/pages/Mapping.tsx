@@ -31,7 +31,7 @@ export default function Mapping() {
         <CardContent>
           <div className="space-y-3">
             {estimates.map((est) => (
-              <div key={est.activityId} className="rounded-md border p-3 space-y-2">
+              <div key={est.activityId} className="rounded-lg border border-border p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">{est.matchedFactor.name}</p>

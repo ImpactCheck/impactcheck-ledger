@@ -14,18 +14,18 @@ export default function Setup() {
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Project Setup</h1>
         <p className="text-muted-foreground mt-1">Configure your carbon audit project parameters.</p>
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle className="text-lg">General Information</CardTitle>
           <CardDescription>Define the scope of this audit.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           <div className="space-y-2">
             <Label>Project Name</Label>
             <Input

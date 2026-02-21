@@ -7,7 +7,7 @@ interface EmbodiedChartProps {
   concreteCarbon: number;
 }
 
-const COLORS = ["hsl(145 63% 42%)", "hsl(200 70% 50%)", "hsl(30 80% 55%)"];
+const COLORS = ["hsl(145 55% 42%)", "hsl(145 45% 55%)", "hsl(145 55% 32%)"];
 
 export function EmbodiedChart({ gpuCarbon, coolingCarbon, concreteCarbon }: EmbodiedChartProps) {
   const data = [

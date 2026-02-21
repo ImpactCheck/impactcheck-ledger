@@ -27,21 +27,21 @@ export default function Recommendations() {
       </div>
 
       {recs.map((rec) => (
-        <Card key={rec.id}>
+        <Card key={rec.id} className="border-l-4 border-l-primary">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
                 <TrendingDown className="h-4 w-4 text-primary" />
                 {rec.title}
               </CardTitle>
-              <Badge variant="outline" className="font-mono text-primary">
+              <Badge variant="outline" className="font-mono text-primary border-primary/40 rounded-full">
                 {formatTonnes(Math.abs(rec.expectedDeltaKg))} t reduction
               </Badge>
             </div>
             <CardDescription>{rec.summary}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="rounded-md bg-secondary/50 p-3 text-sm font-mono">
+            <div className="rounded-lg bg-primary/5 dark:bg-primary/10 border border-primary/10 p-3 text-sm font-mono">
               {rec.strategyDraftText}
             </div>
             {rec.constraints && rec.constraints.length > 0 && (

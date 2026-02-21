@@ -30,12 +30,12 @@ export default function Activities() {
         <CardContent>
           <div className="space-y-2">
             {activities.map((act) => (
-              <div key={act.id} className="flex items-center justify-between rounded-md border px-3 py-2.5 text-sm">
+              <div key={act.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5 text-sm">
                 <div className="flex-1">
                   <p className="font-medium">{act.text}</p>
                   <div className="flex items-center gap-2 mt-1">
                     {act.unit_type && (
-                      <Badge variant="outline" className="text-[10px]">{act.unit_type}</Badge>
+                      <Badge variant="outline" className="text-[10px] rounded-md border-primary/30 text-primary">{act.unit_type}</Badge>
                     )}
                     {act.quantity != null && act.unit && (
                       <span className="text-xs text-muted-foreground font-mono">{act.quantity.toLocaleString()} {act.unit}</span>

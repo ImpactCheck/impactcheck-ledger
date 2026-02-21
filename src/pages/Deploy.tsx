@@ -34,7 +34,7 @@ export default function Deploy() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Deploy & Share</CardTitle>
             {plan && (
-              <Badge variant="outline" className={statusColor[plan.status]}>
+              <Badge variant="outline" className={`rounded-full ${statusColor[plan.status]}`}>
                 {plan.status.replace("_", " ")}
               </Badge>
             )}
@@ -44,7 +44,7 @@ export default function Deploy() {
         <CardContent>
           {plan ? (
             <div className="space-y-3">
-              <div className="rounded-md bg-secondary/30 p-3 font-mono text-xs space-y-1 max-h-48 overflow-y-auto">
+              <div className="rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs space-y-1 max-h-48 overflow-y-auto">
                 {plan.logs.map((log, i) => (
                   <div key={i} className="flex items-start gap-2">
                     <Terminal className="h-3 w-3 mt-0.5 text-primary shrink-0" />
