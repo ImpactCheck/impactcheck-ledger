@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Loader2, Check, AlertCircle, Info } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Check, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { api } from "@/api";
@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useStepCompletion } from "@/hooks/useStepCompletion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import JobProgressCard from "@/components/JobProgressCard";
 
 export default function Mapping() {
   const navigate = useNavigate();
@@ -82,25 +83,7 @@ export default function Mapping() {
               </AlertDescription>
             </Alert>
           )}
-          {job && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{job.stage ?? "Waiting"}</span>
-                <span className="font-mono text-xs">{job.progress}%</span>
-              </div>
-              <Progress value={job.progress} className="h-2" />
-              {jobFailed && (
-                <div className="flex items-center gap-2 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4" /> Mapping failed. Please retry.
-                </div>
-              )}
-              {jobDone && (
-                <div className="flex items-center gap-2 text-sm text-primary font-medium">
-                  <Check className="h-4 w-4" /> Mapping complete
-                </div>
-              )}
-            </div>
-          )}
+          {job && <JobProgressCard job={job} type="mapping" />}
           {!jobRunning && (
             <Button onClick={handleMapping} className="gap-2 rounded-xl" disabled={jobRunning || !canRunMapping}>
               {hasEstimates ? "Re-run Mapping" : "Run Climatiq Mapping"}
