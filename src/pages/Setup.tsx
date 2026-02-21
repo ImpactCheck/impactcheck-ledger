@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowRight, Loader2, Leaf } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { UseCase } from "@/contexts/ProjectContext";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 
@@ -39,7 +41,7 @@ export default function Setup() {
       const created = await api.createProject({
         name: project.projectName,
         year: project.year,
-        companyType: project.companyType === "ai_infra" ? "ai_infra" : "other",
+        companyType: "other",
         primaryRegion: project.primaryRegion,
         comparisonRegions: project.comparisonRegions
       });
@@ -98,13 +100,13 @@ export default function Setup() {
             </div>
 
             <div className="space-y-2">
-              <Label>Company Type</Label>
-              <Select value={project.companyType} onValueChange={(v) => updateProject({ companyType: v as any })}>
+              <Label>Use Case</Label>
+              <Select value={project.useCase} onValueChange={(v) => updateProject({ useCase: v as UseCase })}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ai_infra">AI Infrastructure</SelectItem>
-                  <SelectItem value="enterprise">Enterprise</SelectItem>
-                  <SelectItem value="startup">Startup</SelectItem>
+                  <SelectItem value="company">Company</SelectItem>
+                  <SelectItem value="investor">Investor</SelectItem>
+                  <SelectItem value="regulator">Regulator</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -152,6 +154,23 @@ export default function Setup() {
               placeholder="e.g. 1200000"
               className="h-11" />
 
+          </div>
+
+          <div className="flex items-start gap-3 rounded-xl bg-muted/50 p-4">
+            <Checkbox
+              id="deployOptIn"
+              checked={project.deployOptIn}
+              onCheckedChange={(checked) => updateProject({ deployOptIn: !!checked })}
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="deployOptIn" className="cursor-pointer font-medium">
+                Help with implementation
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Do you want help with the implementation of a proposed improved carbon-efficient pipeline? Enabling this adds a Deploy step to the workflow.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

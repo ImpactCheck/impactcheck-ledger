@@ -16,7 +16,7 @@ export default function Recommendations() {
   const navigate = useNavigate();
   const { project } = useProject();
   const projectId = project.currentProjectId ?? "prj_1";
-  const showDeploy = project.companyType === "ai_infra";
+  const showDeploy = project.deployOptIn;
 
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [generating, setGenerating] = useState(false);

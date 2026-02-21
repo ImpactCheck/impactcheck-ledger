@@ -11,7 +11,7 @@ interface Step {
   path: string;
   label: string;
   icon: React.ElementType;
-  aiInfraOnly?: boolean;
+  deployOnly?: boolean;
   completionKey: keyof StepCompletion;
 }
 
@@ -22,7 +22,7 @@ const STEPS: Step[] = [
   { path: "/mapping", label: "Mapping", icon: GitMerge, completionKey: "mapping" },
   { path: "/report", label: "Report", icon: FileText, completionKey: "report" },
   { path: "/recommendations", label: "Recommendations", icon: Lightbulb, completionKey: "recommendations" },
-  { path: "/deploy", label: "Deploy", icon: Rocket, aiInfraOnly: true, completionKey: "deploy" },
+  { path: "/deploy", label: "Deploy", icon: Rocket, deployOnly: true, completionKey: "deploy" },
 ];
 
 export default function DashboardLayout() {
@@ -33,7 +33,7 @@ export default function DashboardLayout() {
   const completion = useStepCompletion();
 
   const visibleSteps = STEPS.filter(
-    (s) => !s.aiInfraOnly || project.companyType === "ai_infra"
+    (s) => !s.deployOnly || project.deployOptIn
   );
 
   return (
