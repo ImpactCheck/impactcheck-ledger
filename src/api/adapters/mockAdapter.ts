@@ -47,7 +47,6 @@ const REGIONS_GRID: Record<string, number> = {
 
 function determineCo2e(text: string, region: string): number {
   const base = simpleHash(text + region);
-  // Scale into a reasonable range: 500 – 600,000 kg
   return 500 + (base % 600000);
 }
 
@@ -80,15 +79,36 @@ function advanceJob(id: string, type: string): JobStatus {
 // ─── Mock Adapter ─────────────────────────────────────────────────────
 
 export function createMockAdapter(): ImpactcheckClient {
-  const storedProject: Project = {
-    id: "prj_1",
-    name: "Abilene DC Expansion",
-    year: 2026,
-    companyType: "ai_infra",
-    primaryRegion: "texas_ercot",
-    comparisonRegions: ["norway_hydro"],
-    baselineFootprintKgCO2e: 1_200_000,
-  };
+  // Store multiple projects
+  const projects: Project[] = [
+    {
+      id: "prj_1",
+      name: "Abilene DC Expansion",
+      year: 2026,
+      companyType: "ai_infra",
+      primaryRegion: "texas_ercot",
+      comparisonRegions: ["norway_hydro"],
+      baselineFootprintKgCO2e: 1_200_000,
+    },
+    {
+      id: "prj_2",
+      name: "Oslo Green Campus",
+      year: 2026,
+      companyType: "other",
+      primaryRegion: "norway_hydro",
+      comparisonRegions: [],
+      baselineFootprintKgCO2e: 450_000,
+    },
+    {
+      id: "prj_3",
+      name: "Singapore Edge Cluster",
+      year: 2025,
+      companyType: "ai_infra",
+      primaryRegion: "singapore",
+      comparisonRegions: ["iceland_geo"],
+      baselineFootprintKgCO2e: 800_000,
+    },
+  ];
 
   const storedDocs: Document[] = [
     {
@@ -130,6 +150,10 @@ export function createMockAdapter(): ImpactcheckClient {
     })
   );
 
+  function getProject(id: string): Project {
+    return projects.find(p => p.id === id) ?? projects[0];
+  }
+
   function buildEstimates(region: string): ActivityEstimate[] {
     return storedActivities.map((act, i) => ({
       activityId: act.id,
@@ -151,12 +175,11 @@ export function createMockAdapter(): ImpactcheckClient {
     }));
   }
 
-  function buildReport(): Report {
-    const primaryRegion = storedProject.primaryRegion;
-    const regions = [primaryRegion, ...(storedProject.comparisonRegions ?? [])];
+  function buildReport(projectId: string): Report {
+    const proj = getProject(projectId);
+    const regions = [proj.primaryRegion, ...(proj.comparisonRegions ?? [])];
     const totals: Record<string, number> = {};
-    const breakdowns: Record<string, { category: string; co2eKg: number }[]> =
-      {};
+    const breakdowns: Record<string, { category: string; co2eKg: number }[]> = {};
 
     for (const region of regions) {
       const estimates = buildEstimates(region);
@@ -173,12 +196,12 @@ export function createMockAdapter(): ImpactcheckClient {
       }));
     }
 
-    const primaryTotal = totals[primaryRegion] ?? 0;
-    const deltaVsBaselineKg = storedProject.baselineFootprintKgCO2e
-      ? primaryTotal - storedProject.baselineFootprintKgCO2e
+    const primaryTotal = totals[proj.primaryRegion] ?? 0;
+    const deltaVsBaselineKg = proj.baselineFootprintKgCO2e
+      ? primaryTotal - proj.baselineFootprintKgCO2e
       : undefined;
 
-    const allEstimates = buildEstimates(primaryRegion);
+    const allEstimates = buildEstimates(proj.primaryRegion);
     const sorted = [...allEstimates].sort((a, b) => b.co2eKg - a.co2eKg);
     const hotspots = sorted.slice(0, 5).map((e) => {
       const act = storedActivities.find((a) => a.id === e.activityId);
@@ -186,7 +209,7 @@ export function createMockAdapter(): ImpactcheckClient {
     });
 
     return {
-      projectId: "prj_1",
+      projectId,
       totalsByRegion: totals,
       categoryBreakdownByRegion: breakdowns,
       deltaVsBaselineKg,
@@ -217,17 +240,22 @@ export function createMockAdapter(): ImpactcheckClient {
   return {
     // Project
     async createProject(params) {
-      Object.assign(storedProject, {
+      const newProject: Project = {
+        id: `prj_${projects.length + 1}`,
         name: params.name,
         year: params.year,
         companyType: params.companyType,
         primaryRegion: params.primaryRegion,
         comparisonRegions: params.comparisonRegions,
-      });
-      return { ...storedProject };
+      };
+      projects.push(newProject);
+      return { ...newProject };
     },
-    async getProject() {
-      return { ...storedProject };
+    async getProject(projectId) {
+      return { ...getProject(projectId) };
+    },
+    async listProjects() {
+      return [...projects];
     },
 
     // Documents
@@ -279,12 +307,12 @@ export function createMockAdapter(): ImpactcheckClient {
       return advanceJob("job_map_1", "mapping");
     },
     async getEstimates() {
-      return buildEstimates(storedProject.primaryRegion);
+      return buildEstimates(getProject("prj_1").primaryRegion);
     },
 
     // Report
-    async getReport() {
-      return buildReport();
+    async getReport(projectId) {
+      return buildReport(projectId);
     },
 
     // Recommendations
