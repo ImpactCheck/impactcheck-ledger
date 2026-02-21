@@ -47,9 +47,6 @@ export default function DashboardLayout() {
             <span className="text-lg font-bold tracking-tight text-foreground">
               ImpactCheck
             </span>
-            <span className="ml-1.5 text-[9px] uppercase tracking-widest text-muted-foreground bg-muted rounded-full px-2 py-0.5 font-semibold">
-              v2
-            </span>
           </div>
         </div>
 
