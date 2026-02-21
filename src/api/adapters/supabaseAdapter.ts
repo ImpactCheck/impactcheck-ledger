@@ -53,8 +53,9 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         .from("projects")
         .select("*")
         .eq("id", projectId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Project not found");
       return mapProject(data);
     },
 
@@ -118,8 +119,9 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         .from("jobs")
         .select("*")
         .eq("id", jobId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Job not found");
       return mapJob(data);
     },
 

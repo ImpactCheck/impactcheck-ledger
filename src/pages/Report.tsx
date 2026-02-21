@@ -23,14 +23,48 @@ const CATEGORY_COLORS = [
 export default function Report() {
   const navigate = useNavigate();
   const { project } = useProject();
-  const projectId = project.currentProjectId ?? "prj_1";
+  const projectId = project.currentProjectId;
   const [report, setReport] = useState<ReportType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getReport(projectId).then(setReport);
+    if (!projectId) {
+      setLoading(false);
+      setError("No project selected. Please set up a project first.");
+      return;
+    }
+    setLoading(true);
+    api.getReport(projectId)
+      .then(setReport)
+      .catch((e) => setError(e.message ?? "Failed to load report"))
+      .finally(() => setLoading(false));
   }, [projectId]);
 
-  if (!report) return null;
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <p className="text-muted-foreground">Loading report…</p>
+    </div>
+  );
+
+  if (error || !report) return (
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
+      <Card className="card-elevated border-0">
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-2 text-warning">
+            <AlertTriangle className="h-5 w-5" />
+            <p className="font-medium">{error ?? "No report data available."}</p>
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            Complete the Setup, Upload, Activities, and Mapping steps before viewing the report.
+          </p>
+          <Button variant="outline" onClick={() => navigate("/setup")} className="mt-4 gap-2 rounded-xl">
+            <ArrowLeft className="h-4 w-4" /> Go to Setup
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
   const primaryRegion = Object.keys(report.totalsByRegion)[0] ?? "";
   const primaryTotal = report.totalsByRegion[primaryRegion] ?? 0;
