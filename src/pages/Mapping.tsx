@@ -36,6 +36,8 @@ export default function Mapping() {
   }, [projectId]);
 
   const { job, start: startMapping, isRunning: jobRunning } = useJobPoller({
+    projectId,
+    jobType: "mapping",
     onSuccess: loadEstimates,
   });
 

@@ -29,6 +29,7 @@ export interface ImpactcheckClient {
   // Extraction
   startExtract(projectId: string): Promise<JobStatus>;
   getJob(jobId: string): Promise<JobStatus>;
+  getActiveJob(projectId: string, type: string): Promise<JobStatus | null>;
 
   // Activities
   getActivities(projectId: string): Promise<ExtractedActivity[]>;
