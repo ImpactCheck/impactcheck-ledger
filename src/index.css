@@ -102,3 +102,29 @@
     border-color: hsl(145 63% 42% / 0.3);
   }
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  aside, header, nav {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  .text-gradient-green {
+    -webkit-text-fill-color: hsl(145 63% 35%);
+    color: hsl(145 63% 35%);
+  }
+}
