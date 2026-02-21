@@ -57,6 +57,15 @@ def create_document(
     return _row_to_document(row)
 
 
+def get_stored_path(document_id: str) -> Path | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT stored_path FROM documents WHERE id = ?",
+            (document_id,),
+        ).fetchone()
+    return Path(row["stored_path"]) if row else None
+
+
 def list_documents(project_id: str) -> list[Document]:
     with get_conn() as conn:
         rows = conn.execute(

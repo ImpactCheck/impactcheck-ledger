@@ -1,11 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Loader2, Check, Info } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
-import type { ActivityEstimate, JobStatus } from "@/contracts/impactcheck.v2";
+import type { ActivityEstimate } from "@/contracts/impactcheck.v2";
 import { formatTonnes } from "@/contracts/impactcheck.v2";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useStepCompletion } from "@/hooks/useStepCompletion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import JobProgressCard from "@/components/JobProgressCard";
+import { useJobPoller } from "@/hooks/useJobPoller";
 
 export default function Mapping() {
   const navigate = useNavigate();
@@ -24,9 +25,7 @@ export default function Mapping() {
   const isMultiRegion = allRegions.length > 1;
 
   const [estimates, setEstimates] = useState<ActivityEstimate[]>([]);
-  const [job, setJob] = useState<JobStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [activeTab, setActiveTab] = useState(allRegions[0] ?? "all");
 
   const loadEstimates = useCallback(() => {
@@ -36,24 +35,14 @@ export default function Mapping() {
     });
   }, [projectId]);
 
+  const { job, start: startMapping, isRunning: jobRunning } = useJobPoller({
+    onSuccess: loadEstimates,
+  });
+
   useEffect(() => { loadEstimates(); }, [loadEstimates]);
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
-  const handleMapping = async () => {
-    const initial = await api.startMapping(projectId);
-    setJob(initial);
-    pollRef.current = setInterval(async () => {
-      const status = await api.getJob(initial.id);
-      setJob(status);
-      if (status.status === "succeeded" || status.status === "failed") {
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = null;
-        if (status.status === "succeeded") loadEstimates();
-      }
-    }, 1500);
-  };
+  const handleMapping = () => startMapping(() => api.startMapping(projectId));
 
-  const jobRunning = job?.status === "running" || job?.status === "queued";
   const jobDone = job?.status === "succeeded";
   const jobFailed = job?.status === "failed";
   const hasEstimates = estimates.length > 0;

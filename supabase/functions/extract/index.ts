@@ -21,14 +21,43 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Create job
+    // Create the job and return it immediately so the frontend can start polling.
     const { data: job, error: jobErr } = await supabase
       .from("jobs")
-      .insert({ project_id: projectId, type: "extract", status: "running", progress: 5, stage: "initializing" })
+      .insert({ project_id: projectId, type: "extract", status: "running", progress: 5, stage: "reading_files" })
       .select()
       .single();
     if (jobErr) throw jobErr;
 
+    // Run extraction in the background so we can return the job ID now.
+    const work = runExtraction(job.id, projectId, supabase, GEMINI_API_KEY);
+    // @ts-ignore — EdgeRuntime.waitUntil keeps the function alive after the response is sent.
+    if (typeof EdgeRuntime !== "undefined") {
+      EdgeRuntime.waitUntil(work);
+    } else {
+      // Local dev fallback: process synchronously (response is already built below).
+      work.catch((e) => console.error("Background extraction error:", e));
+    }
+
+    return new Response(JSON.stringify(formatJob(job)), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("extract error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
+
+async function runExtraction(
+  jobId: string,
+  projectId: string,
+  supabase: ReturnType<typeof createClient>,
+  GEMINI_API_KEY: string,
+): Promise<void> {
+  try {
     // Get documents for this project
     const { data: docs } = await supabase
       .from("documents")
@@ -36,11 +65,11 @@ serve(async (req) => {
       .eq("project_id", projectId);
 
     if (!docs || docs.length === 0) {
-      await supabase.from("jobs").update({ status: "failed", message: "No documents found", progress: 100 }).eq("id", job.id);
-      return new Response(JSON.stringify(formatJob({ ...job, status: "failed" })), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      await supabase.from("jobs").update({ status: "failed", message: "No documents found", progress: 100, stage: "done" }).eq("id", jobId);
+      return;
     }
 
-    await supabase.from("jobs").update({ progress: 15, stage: "reading_files" }).eq("id", job.id);
+    await supabase.from("jobs").update({ progress: 15, stage: "reading_files", message: `Reading ${docs.length} document(s)…` }).eq("id", jobId);
 
     // Download document contents
     const docTexts: { docId: string; filename: string; content: string }[] = [];
@@ -55,11 +84,11 @@ serve(async (req) => {
     }
 
     if (docTexts.length === 0) {
-      await supabase.from("jobs").update({ status: "failed", message: "Could not read any documents", progress: 100 }).eq("id", job.id);
-      return new Response(JSON.stringify(formatJob({ ...job, status: "failed" })), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      await supabase.from("jobs").update({ status: "failed", message: "Could not read any documents", progress: 100, stage: "done" }).eq("id", jobId);
+      return;
     }
 
-    await supabase.from("jobs").update({ progress: 30, stage: "extracting" }).eq("id", job.id);
+    await supabase.from("jobs").update({ progress: 30, stage: "extracting", message: "Sending documents to Gemini…" }).eq("id", jobId);
 
     // Build prompt optimized for Climatiq Search API
     const prompt = `You are a carbon emissions data extraction specialist. Your job is to extract emission-producing activities from documents and prepare them for the Climatiq emissions database Search API.
@@ -114,6 +143,8 @@ Return ONLY valid JSON array, no markdown fences, no explanation.
 Documents:
 ${docTexts.map((d, i) => `--- Document ${i}: ${d.filename} ---\n${d.content}`).join("\n\n")}`;
 
+    await supabase.from("jobs").update({ progress: 45, stage: "parsing", message: "Gemini is analysing your documents…" }).eq("id", jobId);
+
     const geminiResp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -129,13 +160,11 @@ ${docTexts.map((d, i) => `--- Document ${i}: ${d.filename} ---\n${d.content}`).j
     if (!geminiResp.ok) {
       const errText = await geminiResp.text();
       console.error("Gemini error:", errText);
-      await supabase.from("jobs").update({ status: "failed", message: "AI extraction failed", progress: 100 }).eq("id", job.id);
-      return new Response(JSON.stringify(formatJob({ ...job, status: "failed", message: "AI extraction failed" })), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      await supabase.from("jobs").update({ status: "failed", message: "AI extraction failed", progress: 100, stage: "done" }).eq("id", jobId);
+      return;
     }
 
-    await supabase.from("jobs").update({ progress: 60, stage: "normalizing_queries" }).eq("id", job.id);
+    await supabase.from("jobs").update({ progress: 65, stage: "normalizing_queries", message: "Normalising search queries…" }).eq("id", jobId);
 
     const geminiData = await geminiResp.json();
     let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
@@ -156,7 +185,7 @@ ${docTexts.map((d, i) => `--- Document ${i}: ${d.filename} ---\n${d.content}`).j
       unit_type: validateUnitType(a.unit_type),
     }));
 
-    await supabase.from("jobs").update({ progress: 75, stage: "writing_activities" }).eq("id", job.id);
+    await supabase.from("jobs").update({ progress: 80, stage: "writing_activities", message: `Writing ${extractedActivities.length} activities…` }).eq("id", jobId);
 
     // Delete old activities for this project
     await supabase.from("activities").delete().eq("project_id", projectId);
@@ -190,21 +219,17 @@ ${docTexts.map((d, i) => `--- Document ${i}: ${d.filename} ---\n${d.content}`).j
       progress: 100,
       stage: "done",
       message: `Extracted ${extractedActivities.length} activities`,
-    }).eq("id", job.id);
-
-    const { data: updatedJob } = await supabase.from("jobs").select("*").eq("id", job.id).single();
-
-    return new Response(JSON.stringify(formatJob(updatedJob)), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    }).eq("id", jobId);
   } catch (e) {
-    console.error("extract error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("runExtraction error:", e);
+    await supabase.from("jobs").update({
+      status: "failed",
+      progress: 100,
+      stage: "done",
+      message: e instanceof Error ? e.message : "Extraction failed",
+    }).eq("id", jobId).catch(() => {});
   }
-});
+}
 
 // ─── Helpers ──────────────────────────────────────────────
 

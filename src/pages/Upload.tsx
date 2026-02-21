@@ -2,11 +2,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Upload as UploadIcon, FileSpreadsheet, FileText as FileTextIcon, Check, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
-import type { Document, JobStatus } from "@/contracts/impactcheck.v2";
+import type { Document } from "@/contracts/impactcheck.v2";
 import JobProgressCard from "@/components/JobProgressCard";
+import { useJobPoller } from "@/hooks/useJobPoller";
 
 export default function Upload() {
   const navigate = useNavigate();
@@ -15,16 +16,15 @@ export default function Upload() {
 
   const [docs, setDocs] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [job, setJob] = useState<JobStatus | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { job, start: startExtract, isRunning: extractRunning } = useJobPoller();
 
   const loadDocs = useCallback(() => {
     api.listDocuments(projectId).then(setDocs);
   }, [projectId]);
 
   useEffect(() => { loadDocs(); }, [loadDocs]);
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -38,18 +38,7 @@ export default function Upload() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleExtract = async () => {
-    const initial = await api.startExtract(projectId);
-    setJob(initial);
-    pollRef.current = setInterval(async () => {
-      const status = await api.getJob(initial.id);
-      setJob(status);
-      if (status.status === "succeeded" || status.status === "failed") {
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    }, 1500);
-  };
+  const handleExtract = () => startExtract(() => api.startExtract(projectId));
 
   const fileIcon = (ft: string) => {
     if (ft === "csv" || ft === "xlsx") return <FileSpreadsheet className="h-4 w-4 text-primary" />;
@@ -58,7 +47,6 @@ export default function Upload() {
 
   const extractDone = job?.status === "succeeded";
   const extractFailed = job?.status === "failed";
-  const extractRunning = job?.status === "running" || job?.status === "queued";
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in-up">

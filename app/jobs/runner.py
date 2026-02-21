@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Awaitable
 
 from app.jobs.deterministic import build_extracted_activities
+from app.jobs.gemini_extraction import extract_with_gemini
 from app.jobs.mapping_pipeline import run_mapping_pipeline
 from app.settings import get_settings
 from app.storage import activities_repo, documents_repo, estimates_repo, jobs_repo, projects_repo
@@ -34,14 +35,15 @@ class JobRunner:
             task.add_done_callback(lambda _: self._tasks.pop(job_id, None))
 
     async def _run_extract(self, job_id: str, project_id: str) -> None:
-        step_delay = get_settings().job_step_delay_seconds
+        settings = get_settings()
+        step_delay = settings.job_step_delay_seconds
 
         try:
             jobs_repo.update_job(
                 job_id,
                 status="running",
                 progress=10,
-                stage="loading_documents",
+                stage="reading_files",
                 message="Loading project documents",
             )
             await asyncio.sleep(step_delay)
@@ -51,21 +53,49 @@ class JobRunner:
                 raise RuntimeError("Project not found")
 
             docs = documents_repo.list_documents(project_id)
-            jobs_repo.update_job(
-                job_id,
-                progress=40,
-                stage="extracting_activities",
-                message=f"Synthesizing activities from {len(docs)} document(s)",
-            )
-            await asyncio.sleep(step_delay)
 
-            activities = build_extracted_activities(project, docs)
+            gemini_key = settings.gemini_api_key
+            if gemini_key:
+                stored_paths = [documents_repo.get_stored_path(doc.id) for doc in docs]
+                jobs_repo.update_job(
+                    job_id,
+                    progress=30,
+                    stage="extracting",
+                    message=f"Sending {len(docs)} document(s) to Gemini for extraction",
+                )
+                await asyncio.sleep(step_delay)
+
+                jobs_repo.update_job(
+                    job_id,
+                    progress=50,
+                    stage="parsing",
+                    message="Gemini processing documents…",
+                )
+                activities = await extract_with_gemini(gemini_key, project, docs, stored_paths)
+
+                jobs_repo.update_job(
+                    job_id,
+                    progress=80,
+                    stage="normalizing_queries",
+                    message=f"Extracted {len(activities)} activities, normalizing…",
+                )
+                await asyncio.sleep(step_delay)
+            else:
+                jobs_repo.update_job(
+                    job_id,
+                    progress=40,
+                    stage="extracting_activities",
+                    message=f"No GEMINI_API_KEY — using deterministic extraction for {len(docs)} document(s)",
+                )
+                await asyncio.sleep(step_delay)
+                activities = build_extracted_activities(project, docs)
+
             activities_repo.replace_activities(project_id, activities)
 
             jobs_repo.update_job(
                 job_id,
-                progress=85,
-                stage="persisting",
+                progress=90,
+                stage="writing_activities",
                 message="Persisting extracted activities",
             )
             await asyncio.sleep(step_delay)
@@ -75,7 +105,7 @@ class JobRunner:
                 job_id,
                 status="succeeded",
                 progress=100,
-                stage="completed",
+                stage="done",
                 message=f"Extraction completed: {len(activities)} activities",
             )
         except Exception as exc:

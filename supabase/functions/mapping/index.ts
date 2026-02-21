@@ -29,7 +29,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Create job
+    // Create job and return it immediately so the frontend can start polling.
     const { data: job, error: jobErr } = await supabase
       .from("jobs")
       .insert({ project_id: projectId, type: "mapping", status: "running", progress: 5, stage: "loading_activities" })
@@ -37,6 +37,34 @@ serve(async (req) => {
       .single();
     if (jobErr) throw jobErr;
 
+    // Run mapping in the background.
+    const work = runMapping(job.id, projectId, supabase, CLIMATIQ_API_KEY ?? null);
+    // @ts-ignore — EdgeRuntime.waitUntil keeps the function alive after the response is sent.
+    if (typeof EdgeRuntime !== "undefined") {
+      EdgeRuntime.waitUntil(work);
+    } else {
+      work.catch((e) => console.error("Background mapping error:", e));
+    }
+
+    return new Response(JSON.stringify(formatJob(job)), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("mapping error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
+
+async function runMapping(
+  jobId: string,
+  projectId: string,
+  supabase: ReturnType<typeof createClient>,
+  CLIMATIQ_API_KEY: string | null,
+): Promise<void> {
+  try {
     // Get activities
     const { data: activities } = await supabase
       .from("activities")
@@ -44,17 +72,15 @@ serve(async (req) => {
       .eq("project_id", projectId);
 
     if (!activities || activities.length === 0) {
-      await supabase.from("jobs").update({ status: "failed", message: "No activities found", progress: 100 }).eq("id", job.id);
-      return new Response(JSON.stringify(formatJob({ ...job, status: "failed", message: "No activities found" })), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      await supabase.from("jobs").update({ status: "failed", message: "No activities found", progress: 100, stage: "done" }).eq("id", jobId);
+      return;
     }
 
     // Get project for region info
     const { data: proj } = await supabase.from("projects").select("primary_region").eq("id", projectId).single();
     const projectRegion = mapRegionToClimatiq(proj?.primary_region || "");
 
-    await supabase.from("jobs").update({ progress: 10, stage: "searching_factors" }).eq("id", job.id);
+    await supabase.from("jobs").update({ progress: 10, stage: "searching_factors", message: `Searching factors for ${activities.length} activities…` }).eq("id", jobId);
 
     // Delete old estimates
     await supabase.from("estimates").delete().eq("project_id", projectId);
@@ -68,11 +94,13 @@ serve(async (req) => {
       const progress = 10 + Math.floor((i / total) * 75);
       const searchQuery = act.search_query || act.text;
       const region = act.region ? mapRegionToClimatiq(act.region) : projectRegion;
+      const currentStage = i < total / 2 ? "searching_factors" : "estimating";
 
       await supabase.from("jobs").update({
         progress,
-        stage: i < total / 2 ? "searching_factors" : "estimating",
-      }).eq("id", job.id);
+        stage: currentStage,
+        message: `Processing activity ${i + 1} of ${total}…`,
+      }).eq("id", jobId);
 
       try {
         if (useStub) {
@@ -113,7 +141,7 @@ serve(async (req) => {
               year: searchResult.factor.year,
               unit: toUnitTypeArray(searchResult.factor.unit_type)[0] ?? null,
             },
-            confidence: searchResult.confidence * 0.5, // lower confidence without estimate
+            confidence: searchResult.confidence * 0.5,
             co2e_kg: 0,
             input_used: { unit_type: act.unit_type, quantity: null, amount: null, note: "needs_quantity" },
           });
@@ -188,7 +216,7 @@ serve(async (req) => {
       await supabase.from("estimates").insert(estimates);
     }
 
-    await supabase.from("jobs").update({ progress: 90, stage: "ranking" }).eq("id", job.id);
+    await supabase.from("jobs").update({ progress: 90, stage: "ranking", message: "Ranking estimates by CO₂e…" }).eq("id", jobId);
 
     const succeeded = estimates.filter((e) => e.co2e_kg > 0).length;
 
@@ -196,22 +224,18 @@ serve(async (req) => {
       status: "succeeded",
       progress: 100,
       stage: "done",
-      message: `Mapped ${estimates.length} activities (${succeeded} with estimates)${useStub ? " [stub mode]" : ""}`,
-    }).eq("id", job.id);
-
-    const { data: updatedJob } = await supabase.from("jobs").select("*").eq("id", job.id).single();
-
-    return new Response(JSON.stringify(formatJob(updatedJob)), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+      message: `Mapped ${estimates.length} activities (${succeeded} with CO₂e estimates)${useStub ? " [stub mode — add CLIMATIQ_API_KEY for real values]" : ""}`,
+    }).eq("id", jobId);
   } catch (e) {
-    console.error("mapping error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("runMapping error:", e);
+    await supabase.from("jobs").update({
+      status: "failed",
+      progress: 100,
+      stage: "done",
+      message: e instanceof Error ? e.message : "Mapping failed",
+    }).eq("id", jobId).catch(() => {});
   }
-});
+}
 
 // ─── Climatiq API Functions ──────────────────────────────
 

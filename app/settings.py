@@ -37,6 +37,7 @@ class Settings:
     uploads_dir: Path
     cors_origins: list[str]
     job_step_delay_seconds: float
+    gemini_api_key: str | None
 
 
 @lru_cache(maxsize=1)
@@ -60,4 +61,5 @@ def get_settings() -> Settings:
         uploads_dir=uploads_dir,
         cors_origins=cors_origins,
         job_step_delay_seconds=float(os.getenv("IMPACTCHECK_JOB_STEP_DELAY_SECONDS", "0.2")),
+        gemini_api_key=os.getenv("GEMINI_API_KEY") or None,
     )
