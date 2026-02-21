@@ -4,22 +4,25 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { Settings, Upload, Activity, GitMerge, FileText, Lightbulb, Rocket, Check, ChevronRight, Sun, Moon, LayoutDashboard } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
+import { useStepCompletion } from "@/hooks/useStepCompletion";
+import type { StepCompletion } from "@/hooks/useStepCompletion";
 
 interface Step {
   path: string;
   label: string;
   icon: React.ElementType;
   aiInfraOnly?: boolean;
+  completionKey: keyof StepCompletion;
 }
 
 const STEPS: Step[] = [
-  { path: "/setup", label: "Setup", icon: Settings },
-  { path: "/upload", label: "Upload", icon: Upload },
-  { path: "/activities", label: "Activities", icon: Activity },
-  { path: "/mapping", label: "Mapping", icon: GitMerge },
-  { path: "/report", label: "Report", icon: FileText },
-  { path: "/recommendations", label: "Recommendations", icon: Lightbulb },
-  { path: "/deploy", label: "Deploy", icon: Rocket, aiInfraOnly: true },
+  { path: "/setup", label: "Setup", icon: Settings, completionKey: "setup" },
+  { path: "/upload", label: "Upload", icon: Upload, completionKey: "upload" },
+  { path: "/activities", label: "Activities", icon: Activity, completionKey: "activities" },
+  { path: "/mapping", label: "Mapping", icon: GitMerge, completionKey: "mapping" },
+  { path: "/report", label: "Report", icon: FileText, completionKey: "report" },
+  { path: "/recommendations", label: "Recommendations", icon: Lightbulb, completionKey: "recommendations" },
+  { path: "/deploy", label: "Deploy", icon: Rocket, aiInfraOnly: true, completionKey: "deploy" },
 ];
 
 export default function DashboardLayout() {
@@ -27,12 +30,11 @@ export default function DashboardLayout() {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const completion = useStepCompletion();
 
   const visibleSteps = STEPS.filter(
     (s) => !s.aiInfraOnly || project.companyType === "ai_infra"
   );
-
-  const currentIdx = visibleSteps.findIndex((s) => s.path === location.pathname);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -44,9 +46,6 @@ export default function DashboardLayout() {
           <div>
             <span className="text-lg font-bold tracking-tight text-foreground">
               ImpactCheck
-            </span>
-            <span className="ml-1.5 text-[9px] uppercase tracking-widest text-muted-foreground bg-muted rounded-full px-2 py-0.5 font-semibold">
-              v2
             </span>
           </div>
         </div>
@@ -68,9 +67,9 @@ export default function DashboardLayout() {
             Workflow
           </p>
           <div className="space-y-1">
-            {visibleSteps.map((step, idx) => {
-              const isActive = idx === currentIdx;
-              const isCompleted = currentIdx > idx;
+            {visibleSteps.map((step) => {
+              const isActive = step.path === location.pathname;
+              const isCompleted = completion[step.completionKey];
               const StepIcon = step.icon;
 
               return (
