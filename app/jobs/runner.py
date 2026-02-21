@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Awaitable
 
 from app.jobs.deterministic import build_extracted_activities
-from app.jobs.gemini_extraction import extract_with_gemini
+from app.jobs.gemini_extraction import _build_parts, extract_with_gemini
 from app.jobs.mapping_pipeline import run_mapping_pipeline
 from app.settings import get_settings
 from app.storage import activities_repo, documents_repo, estimates_repo, jobs_repo, projects_repo
@@ -146,13 +146,24 @@ class JobRunner:
                 )
                 return
 
+            settings = get_settings()
+
+            # Build document context parts for Gemini estimation fallbacks
+            doc_parts: list[dict] | None = None
+            if settings.gemini_api_key:
+                docs = documents_repo.list_documents(project_id)
+                stored_paths = [documents_repo.get_stored_path(doc.id) for doc in docs]
+                parts = _build_parts(docs, stored_paths)
+                doc_parts = parts if parts else None
+
             def progress_cb(progress: int, stage: str, message: str) -> None:
                 jobs_repo.update_job(job_id, progress=progress, stage=stage, message=message)
 
             estimates = run_mapping_pipeline(
                 project, activities,
                 progress_cb=progress_cb,
-                gemini_api_key=get_settings().gemini_api_key,
+                gemini_api_key=settings.gemini_api_key,
+                doc_parts=doc_parts,
             )
             await asyncio.sleep(step_delay)
 

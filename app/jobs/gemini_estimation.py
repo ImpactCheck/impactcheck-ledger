@@ -21,11 +21,10 @@ GEMINI_ESTIMATION_URL = (
 _ESTIMATION_PROMPT = """\
 You are a carbon footprint expert. Estimate the CO2e emissions in kilograms \
 (kg CO2 equivalent) for the activity described below.
-
+{doc_context_line}
 Activity: {activity_text}
 Quantity: {quantity_str}
 {factor_line}
-
 Guidelines:
 - Use IPCC / GHG Protocol / Ecoinvent global average emission intensities
 - For materials: include manufacturing + upstream transport emissions
@@ -33,7 +32,8 @@ Guidelines:
 - For servers/hardware: use lifecycle embedded carbon (approx 1,000-3,000 kgCO2e per server)
 - For transport: use typical freight emission factors (road ~0.1, sea ~0.01, air ~0.6 kgCO2e/t-km)
 - Be conservative: prefer slightly lower estimates over speculation
-- If quantity is unknown, assume a representative single unit or typical annual amount
+- If quantity is unknown, search the document context above for the relevant quantity; \
+if not found assume a representative single unit or typical annual amount
 
 Respond with ONLY a JSON object (no markdown fences, no explanation):
 {{"co2e_kg": <number>, "confidence": "high|medium|low", "rationale": "<one sentence>"}}"""
@@ -47,6 +47,7 @@ def estimate_co2e_with_gemini(
     unit_type: str | None,
     factor_name: str | None = None,
     factor_unit: str | None = None,
+    doc_parts: list[dict] | None = None,
 ) -> float | None:
     """Synchronous Gemini call to estimate CO2e in kg.
 
@@ -67,14 +68,24 @@ def estimate_co2e_with_gemini(
         if factor_unit:
             factor_line += f" (unit: {factor_unit})"
 
+    doc_context_line = (
+        "\nDocument context is provided above — search it for the exact quantity "
+        "and scale of this activity.\n"
+        if doc_parts else ""
+    )
+
     prompt = _ESTIMATION_PROMPT.format(
+        doc_context_line=doc_context_line,
         activity_text=activity_text,
         quantity_str=quantity_str,
         factor_line=factor_line,
     )
 
+    content_parts: list[dict] = list(doc_parts) if doc_parts else []
+    content_parts.append({"text": prompt})
+
     body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
+        "contents": [{"parts": content_parts}],
         "generationConfig": {
             "temperature": 0.1,
             "maxOutputTokens": 512,

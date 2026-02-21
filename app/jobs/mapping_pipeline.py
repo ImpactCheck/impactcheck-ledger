@@ -285,6 +285,7 @@ def run_mapping_pipeline(
     activities: list[ExtractedActivity],
     progress_cb: Callable[[int, str, str], None] | None = None,
     gemini_api_key: str | None = None,
+    doc_parts: list[dict] | None = None,
 ) -> list[ActivityEstimate]:
     """
     Run cache → search → estimate → ranking. progress_cb(progress, stage, message).
@@ -368,7 +369,8 @@ def run_mapping_pipeline(
         if not factor:
             if gemini_api_key:
                 co2e = estimate_co2e_with_gemini(
-                    gemini_api_key, activity.text, activity.quantity, activity.unit, activity.unit_type
+                    gemini_api_key, activity.text, activity.quantity, activity.unit, activity.unit_type,
+                    doc_parts=doc_parts,
                 )
                 if co2e is not None and co2e > 0:
                     estimates_out.append(_make_gemini_estimate(activity, None, co2e))
@@ -377,6 +379,20 @@ def run_mapping_pipeline(
             continue
 
         if activity.quantity is None and activity.amount is None:
+            if gemini_api_key:
+                co2e = estimate_co2e_with_gemini(
+                    gemini_api_key,
+                    activity.text,
+                    None,
+                    activity.unit,
+                    activity.unit_type,
+                    factor_name=factor.get("name"),
+                    factor_unit=_factor_unit(factor),
+                    doc_parts=doc_parts,
+                )
+                if co2e is not None and co2e > 0:
+                    estimates_out.append(_make_gemini_estimate(activity, factor, co2e))
+                    continue
             estimates_out.append(_make_needs_quantity_estimate(activity, factor, confidence_level))
             continue
 
@@ -449,6 +465,7 @@ def run_mapping_pipeline(
                         activity.unit_type,
                         factor_name=factor.get("name"),
                         factor_unit=_factor_unit(factor),
+                        doc_parts=doc_parts,
                     )
                     if co2e is not None and co2e > 0:
                         estimates_out.append(_make_gemini_estimate(activity, factor, co2e))

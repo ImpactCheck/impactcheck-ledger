@@ -7,12 +7,15 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import re
 from pathlib import Path
 
 import httpx
 
 from app.models import Document, ExtractedActivity, Project
+
+logger = logging.getLogger(__name__)
 
 GEMINI_MODEL = "gemini-3-flash-preview"
 GEMINI_URL = (
@@ -293,6 +296,127 @@ def _build_parts(
     return parts
 
 
+_INFER_QUANTITIES_PROMPT = """\
+Some emission activities were extracted from the documents above but are missing \
+a quantity and/or unit_type. Using the document context, fill in the missing values.
+
+Activities needing quantity/unit inference (JSON):
+{items_json}
+
+For each activity:
+1. Search the documents for any number directly associated with this activity.
+   If found: use the exact value (confidence="high").
+2. If no number is present: use a typical/representative amount for this type of activity
+   (confidence="low").
+   Examples: electricity → 1000 kWh, cement → 1 t, diesel → 1000 L, flight → 5000 km,
+   server → 1 units, natural gas → 10000 m3, road freight → 10000 t*km
+
+unit_type must be exactly one of:
+Weight, Energy, Power, Volume, Area, Distance, Money, Number, Data, Time,
+WeightOverDistance, PassengerOverDistance, AreaOverTime, DataOverTime,
+DistanceOverTime, NumberOverTime, WeightOverTime
+
+Respond with ONLY a JSON array (no markdown fences), preserving the input order:
+[{{"id": "act_0001", "quantity": 100.0, "unit": "t", "unit_type": "Weight", \
+"confidence": "high|medium|low", "rationale": "one sentence"}}]"""
+
+
+async def _infer_missing_quantities(
+    client: httpx.AsyncClient,
+    api_key: str,
+    activities: list[ExtractedActivity],
+    document_parts: list[dict],
+) -> list[ExtractedActivity]:
+    """Second-pass Gemini call to fill in quantity/unit_type for activities where both are null."""
+    missing = [
+        a for a in activities
+        if a.quantity is None and a.amount is None and a.unit_type is None
+    ]
+    if not missing:
+        return activities
+
+    items = [
+        {"id": a.id, "raw_text": a.note or a.text, "search_query": a.text}
+        for a in missing
+    ]
+    prompt = _INFER_QUANTITIES_PROMPT.format(items_json=json.dumps(items, ensure_ascii=False))
+    all_parts = list(document_parts) + [{"text": prompt}]
+
+    try:
+        resp = await client.post(
+            GEMINI_URL,
+            params={"key": api_key},
+            json={
+                "contents": [{"parts": all_parts}],
+                "generationConfig": {
+                    "temperature": 0.1,
+                    "maxOutputTokens": 4096,
+                    "response_mime_type": "application/json",
+                },
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        logger.warning("Gemini quantity inference call failed: %s", exc)
+        return activities
+
+    raw_text: str = (
+        data.get("candidates", [{}])[0]
+        .get("content", {})
+        .get("parts", [{}])[0]
+        .get("text", "")
+    )
+    raw_text = re.sub(r"```json\s*", "", raw_text)
+    raw_text = re.sub(r"```\s*", "", raw_text).strip()
+
+    try:
+        inferred: list[dict] = json.loads(raw_text)
+        if isinstance(inferred, dict):
+            for key in ("activities", "items", "results", "data"):
+                if key in inferred and isinstance(inferred[key], list):
+                    inferred = inferred[key]
+                    break
+    except Exception as exc:
+        logger.warning("Gemini quantity inference parse failed: %s", exc)
+        return activities
+
+    inferred_by_id: dict[str, dict] = {
+        item.get("id"): item for item in inferred if isinstance(item, dict) and item.get("id")
+    }
+
+    updated: list[ExtractedActivity] = []
+    for activity in activities:
+        inf = inferred_by_id.get(activity.id)
+        if inf and activity.quantity is None and activity.amount is None and activity.unit_type is None:
+            qty = _to_float(inf.get("quantity"))
+            ut = _validate_unit_type(inf.get("unit_type"))
+            unit = inf.get("unit") or None
+            if qty is not None or ut is not None:
+                logger.info(
+                    "Inferred missing quantity for '%s': %s %s (%s)",
+                    activity.text[:60], qty, unit or ut, inf.get("confidence", "?"),
+                )
+                updated.append(ExtractedActivity(
+                    id=activity.id,
+                    projectId=activity.projectId,
+                    text=activity.text,
+                    search_query=activity.search_query,
+                    unit_type=ut,
+                    region=activity.region,
+                    quantity=qty,
+                    unit=unit,
+                    amount=activity.amount,
+                    currency=activity.currency,
+                    sourceDocumentId=activity.sourceDocumentId,
+                    note=activity.note,
+                ))
+                continue
+        updated.append(activity)
+
+    return updated
+
+
 async def extract_with_gemini(
     api_key: str,
     project: Project,
@@ -326,54 +450,57 @@ async def extract_with_gemini(
         resp.raise_for_status()
         data = resp.json()
 
-    raw_text: str = (
-        data.get("candidates", [{}])[0]
-        .get("content", {})
-        .get("parts", [{}])[0]
-        .get("text", "")
-    )
-    raw_text = re.sub(r"```json\s*", "", raw_text)
-    raw_text = re.sub(r"```\s*", "", raw_text).strip()
-
-    extracted: list[dict] = []
-    if raw_text:
-        try:
-            parsed = json.loads(raw_text)
-            if isinstance(parsed, list):
-                extracted = parsed
-            elif isinstance(parsed, dict):
-                # JSON-mode may wrap in an object — check common keys
-                for key in ("activities", "items", "results", "data", "rows"):
-                    if key in parsed and isinstance(parsed[key], list):
-                        extracted = parsed[key]
-                        break
-        except Exception:
-            pass
-
-    activities: list[ExtractedActivity] = []
-    for idx, item in enumerate(extracted):
-        src_idx = item.get("source_doc_index") or 0
-        src_doc = docs[src_idx] if isinstance(src_idx, int) and src_idx < len(docs) else None
-
-        raw = item.get("raw_text") or ""
-        sq = _normalize_search_query(item.get("search_query") or raw)
-
-        activities.append(
-            ExtractedActivity(
-                id=f"act_{idx + 1:04d}",
-                projectId=project.id,
-                text=sq or "Unknown activity",
-                search_query=sq or None,
-                unit_type=_validate_unit_type(item.get("unit_type")),
-                region=item.get("region") or project.primaryRegion,
-                quantity=_to_float(item.get("quantity")),
-                unit=item.get("unit") or None,
-                amount=_to_float(item.get("amount")),
-                currency=item.get("currency") or None,
-                sourceDocumentId=src_doc.id if src_doc else None,
-                note=(raw[:200] if raw else item.get("note") or None),
-            )
+        raw_text: str = (
+            data.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [{}])[0]
+            .get("text", "")
         )
+        raw_text = re.sub(r"```json\s*", "", raw_text)
+        raw_text = re.sub(r"```\s*", "", raw_text).strip()
+
+        extracted: list[dict] = []
+        if raw_text:
+            try:
+                parsed = json.loads(raw_text)
+                if isinstance(parsed, list):
+                    extracted = parsed
+                elif isinstance(parsed, dict):
+                    # JSON-mode may wrap in an object — check common keys
+                    for key in ("activities", "items", "results", "data", "rows"):
+                        if key in parsed and isinstance(parsed[key], list):
+                            extracted = parsed[key]
+                            break
+            except Exception:
+                pass
+
+        activities: list[ExtractedActivity] = []
+        for idx, item in enumerate(extracted):
+            src_idx = item.get("source_doc_index") or 0
+            src_doc = docs[src_idx] if isinstance(src_idx, int) and src_idx < len(docs) else None
+
+            raw = item.get("raw_text") or ""
+            sq = _normalize_search_query(item.get("search_query") or raw)
+
+            activities.append(
+                ExtractedActivity(
+                    id=f"act_{idx + 1:04d}",
+                    projectId=project.id,
+                    text=sq or "Unknown activity",
+                    search_query=sq or None,
+                    unit_type=_validate_unit_type(item.get("unit_type")),
+                    region=item.get("region") or project.primaryRegion,
+                    quantity=_to_float(item.get("quantity")),
+                    unit=item.get("unit") or None,
+                    amount=_to_float(item.get("amount")),
+                    currency=item.get("currency") or None,
+                    sourceDocumentId=src_doc.id if src_doc else None,
+                    note=(raw[:200] if raw else item.get("note") or None),
+                )
+            )
+
+        # Second pass: infer missing quantity/unit_type for activities that slipped through
+        activities = await _infer_missing_quantities(client, api_key, activities, document_parts)
 
     return activities
 
