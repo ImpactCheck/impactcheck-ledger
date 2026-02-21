@@ -13,7 +13,7 @@ interface OperationalChartProps {
 
 export function OperationalChart({ data }: OperationalChartProps) {
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
+    <div className="rounded-xl border bg-card p-4 space-y-3 card-elevated">
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Bucket B — The Pulse</h3>
         <p className="text-xs text-muted-foreground">Operational Carbon vs. Throughput</p>
@@ -27,16 +27,15 @@ export function OperationalChart({ data }: OperationalChartProps) {
                 <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 20%)" />
-            <XAxis dataKey="month" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="left" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatTonnes(v)} />
-            <YAxis yAxisId="right" orientation="right" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${v} TPS`} />
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <XAxis dataKey="month" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="left" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatTonnes(v)} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${v} TPS`} />
             <Tooltip
-              contentStyle={{ backgroundColor: "hsl(220 18% 13%)", border: "1px solid hsl(220 15% 20%)", borderRadius: 12, fontSize: 12 }}
-              labelStyle={{ color: "hsl(210 20% 90%)" }}
+              contentStyle={{ backgroundColor: "hsl(0 0% 100%)", border: "1px solid hsl(40 15% 90%)", borderRadius: 12, fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
             />
             <Area yAxisId="left" type="monotone" dataKey="emissions" stroke="hsl(var(--primary))" fill="url(#emissionsGrad)" strokeWidth={2} name="Emissions (tonnes)" />
-            <Line yAxisId="right" type="monotone" dataKey="tps" stroke="hsl(145 45% 55%)" strokeWidth={2} dot={false} name="Tokens/sec" />
+            <Line yAxisId="right" type="monotone" dataKey="tps" stroke="hsl(152 40% 52%)" strokeWidth={2} dot={false} name="Tokens/sec" />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

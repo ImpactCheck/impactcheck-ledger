@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Leaf } from "lucide-react";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 
@@ -56,14 +56,20 @@ export default function Setup() {
   const canCreate = project.projectName.trim() && project.primaryRegion;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Project Setup</h1>
-        <p className="text-muted-foreground mt-1">Configure your carbon audit project parameters.</p>
+    <div className="max-w-2xl mx-auto space-y-8 animate-fade-in-up">
+      {/* Page header */}
+      <div className="flex items-center gap-4">
+        <div className="h-12 w-12 rounded-2xl bg-gradient-green flex items-center justify-center">
+          <Leaf className="h-6 w-6 text-primary-foreground" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Project Setup</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Configure your carbon audit project parameters.</p>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-4">
+      <Card className="card-elevated border-0">
+        <CardHeader>
           <CardTitle className="text-lg">General Information</CardTitle>
           <CardDescription>Define the scope of this audit.</CardDescription>
         </CardHeader>
@@ -74,6 +80,7 @@ export default function Setup() {
               value={project.projectName}
               onChange={(e) => updateProject({ projectName: e.target.value })}
               placeholder="e.g. Abilene Data Center Expansion"
+              className="h-11"
             />
           </div>
 
@@ -81,7 +88,7 @@ export default function Setup() {
             <div className="space-y-2">
               <Label>Reporting Year</Label>
               <Select value={String(project.year)} onValueChange={(v) => updateProject({ year: Number(v) })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {[2024, 2025, 2026, 2027].map((y) => (
                     <SelectItem key={y} value={String(y)}>{y}</SelectItem>
@@ -93,7 +100,7 @@ export default function Setup() {
             <div className="space-y-2">
               <Label>Company Type</Label>
               <Select value={project.companyType} onValueChange={(v) => updateProject({ companyType: v as any })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ai_infra">AI Infrastructure</SelectItem>
                   <SelectItem value="enterprise">Enterprise</SelectItem>
@@ -107,7 +114,7 @@ export default function Setup() {
           <div className="space-y-2">
             <Label>Primary Region</Label>
             <Select value={project.primaryRegion} onValueChange={(v) => updateProject({ primaryRegion: v })}>
-              <SelectTrigger><SelectValue placeholder="Select primary region" /></SelectTrigger>
+              <SelectTrigger className="h-11"><SelectValue placeholder="Select primary region" /></SelectTrigger>
               <SelectContent>
                 {REGIONS.map((r) => (
                   <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
@@ -123,7 +130,7 @@ export default function Setup() {
                 <Badge
                   key={r.value}
                   variant={project.comparisonRegions.includes(r.value) ? "default" : "outline"}
-                  className="cursor-pointer select-none"
+                  className="cursor-pointer select-none transition-all hover:scale-105"
                   onClick={() => toggleComparison(r.value)}
                 >
                   {r.label.split(" (")[0]}
@@ -143,13 +150,14 @@ export default function Setup() {
                 })
               }
               placeholder="e.g. 1200000"
+              className="h-11"
             />
           </div>
         </CardContent>
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleCreate} disabled={!canCreate || loading} className="gap-2">
+        <Button onClick={handleCreate} disabled={!canCreate || loading} size="lg" className="gap-2 rounded-xl px-6">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Create Project <ArrowRight className="h-4 w-4" />
         </Button>

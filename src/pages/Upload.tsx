@@ -24,8 +24,6 @@ export default function Upload() {
   }, [projectId]);
 
   useEffect(() => { loadDocs(); }, [loadDocs]);
-
-  // Cleanup polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,7 +41,6 @@ export default function Upload() {
   const handleExtract = async () => {
     const initial = await api.startExtract(projectId);
     setJob(initial);
-
     pollRef.current = setInterval(async () => {
       const status = await api.getJob(initial.id);
       setJob(status);
@@ -59,61 +56,48 @@ export default function Upload() {
     return <FileTextIcon className="h-4 w-4 text-primary" />;
   };
 
-  const statusPillClass = (status: Document["status"]) => {
-    switch (status) {
-      case "ready":
-        return "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30";
-      case "processing":
-        return "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30";
-      case "error":
-        return "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30";
-      default:
-        return "bg-muted text-muted-foreground border-border";
-    }
-  };
-
   const extractDone = job?.status === "succeeded";
   const extractFailed = job?.status === "failed";
   const extractRunning = job?.status === "running" || job?.status === "queued";
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in-up">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Data Upload</h1>
-        <p className="text-muted-foreground mt-1">Upload your hardware BOM, energy bills, or facility specs.</p>
+        <p className="text-muted-foreground text-sm mt-0.5">Upload your hardware BOM, energy bills, or facility specs.</p>
       </div>
 
       {/* Project summary */}
-      <Card>
+      <Card className="card-elevated border-0">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Project</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="text-muted-foreground">Name</span>
-              <p className="font-medium">{project.projectName}</p>
+              <span className="text-muted-foreground text-xs">Name</span>
+              <p className="font-semibold">{project.projectName}</p>
             </div>
             <div>
-              <span className="text-muted-foreground">Year</span>
-              <p className="font-medium">{project.year}</p>
+              <span className="text-muted-foreground text-xs">Year</span>
+              <p className="font-semibold">{project.year}</p>
             </div>
             <div>
-              <span className="text-muted-foreground">Region</span>
-              <p className="font-medium">{project.primaryRegion || project.regions[0] || "—"}</p>
+              <span className="text-muted-foreground text-xs">Region</span>
+              <p className="font-semibold">{project.primaryRegion?.replace(/_/g, " ") || project.regions[0] || "—"}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Upload area */}
-      <Card>
+      <Card className="card-elevated border-0">
         <CardHeader>
           <CardTitle className="text-lg">Upload Files</CardTitle>
           <CardDescription>Drag and drop or browse for your data files.</CardDescription>
         </CardHeader>
         <CardContent>
-          <label className="block border-2 border-dashed border-border rounded-lg p-12 text-center text-muted-foreground hover:border-primary/40 transition-colors cursor-pointer">
+          <label className="block border-2 border-dashed border-border rounded-2xl p-12 text-center text-muted-foreground hover:border-primary/40 hover:bg-primary/[0.02] transition-all cursor-pointer">
             <input
               ref={fileInputRef}
               type="file"
@@ -125,17 +109,19 @@ export default function Upload() {
             {uploading ? (
               <Loader2 className="h-10 w-10 mx-auto mb-3 animate-spin text-primary" />
             ) : (
-              <UploadIcon className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
+              <div className="h-14 w-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <UploadIcon className="h-6 w-6 text-primary" />
+              </div>
             )}
-            <p className="font-medium">{uploading ? "Uploading…" : "Drop files here or click to browse"}</p>
-            <p className="text-xs mt-1">CSV, XLSX, JSON, PDF supported</p>
+            <p className="font-semibold text-foreground">{uploading ? "Uploading…" : "Drop files here or click to browse"}</p>
+            <p className="text-xs mt-1.5 text-muted-foreground">CSV, XLSX, JSON, PDF supported</p>
           </label>
         </CardContent>
       </Card>
 
       {/* Document list */}
       {docs.length > 0 && (
-        <Card>
+        <Card className="card-elevated border-0">
           <CardHeader>
             <CardTitle className="text-lg">Uploaded Documents</CardTitle>
             <CardDescription>{docs.length} file(s) ready</CardDescription>
@@ -143,17 +129,15 @@ export default function Upload() {
           <CardContent>
             <div className="space-y-2">
               {docs.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5 text-sm">
-                  <div className="flex items-center gap-2">
+                <div key={doc.id} className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3 text-sm">
+                  <div className="flex items-center gap-3">
                     {fileIcon(doc.fileType)}
-                    <span className="font-mono">{doc.filename}</span>
+                    <span className="font-mono text-sm">{doc.filename}</span>
                   </div>
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusPillClass(doc.status)}`}
-                  >
-                    {doc.status === "ready" && <Check className="h-3 w-3" />}
+                  <div className="flex items-center gap-2 text-xs text-primary">
+                    <Check className="h-3.5 w-3.5" />
                     {doc.status}
-                  </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -163,7 +147,7 @@ export default function Upload() {
 
       {/* Extraction */}
       {docs.length > 0 && (
-        <Card>
+        <Card className="card-elevated border-0">
           <CardHeader>
             <CardTitle className="text-lg">Extract Activities</CardTitle>
             <CardDescription>Parse uploaded documents to extract carbon-relevant line items.</CardDescription>
@@ -182,19 +166,19 @@ export default function Upload() {
                   </div>
                 )}
                 {extractDone && (
-                  <div className="flex items-center gap-2 text-sm text-primary">
+                  <div className="flex items-center gap-2 text-sm text-primary font-medium">
                     <Check className="h-4 w-4" /> Extraction complete — {job.message}
                   </div>
                 )}
               </div>
             )}
             {!extractRunning && !extractDone && (
-              <Button onClick={handleExtract} className="gap-2" disabled={extractRunning}>
+              <Button onClick={handleExtract} className="gap-2 rounded-xl" disabled={extractRunning}>
                 Run Extraction
               </Button>
             )}
             {extractRunning && (
-              <Button disabled className="gap-2">
+              <Button disabled className="gap-2 rounded-xl">
                 <Loader2 className="h-4 w-4 animate-spin" /> Extracting…
               </Button>
             )}
@@ -204,10 +188,10 @@ export default function Upload() {
 
       {/* Navigation */}
       <div className="flex justify-between">
-        <Button variant="outline" onClick={() => navigate("/setup")} className="gap-2">
+        <Button variant="outline" onClick={() => navigate("/setup")} className="gap-2 rounded-xl">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
-        <Button onClick={() => navigate("/activities")} disabled={!extractDone} className="gap-2">
+        <Button onClick={() => navigate("/activities")} disabled={!extractDone} className="gap-2 rounded-xl">
           Go to Activities <ArrowRight className="h-4 w-4" />
         </Button>
       </div>

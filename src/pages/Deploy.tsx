@@ -32,7 +32,6 @@ export default function Deploy() {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Guard: only ai_infra (after all hooks)
   if (project.companyType !== "ai_infra") {
     return <Navigate to="/recommendations" replace />;
   }
@@ -41,7 +40,6 @@ export default function Deploy() {
     setDeploying(true);
     const initial = await api.deployCrusoe(projectId);
     setPlan(initial);
-
     pollRef.current = setInterval(async () => {
       const status = await api.getDeploymentStatus(projectId);
       setPlan(status);
@@ -58,29 +56,28 @@ export default function Deploy() {
   const cfg = STATUS_CONFIG[status];
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in-up">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Deploy via Crusoe</h1>
-        <p className="text-muted-foreground mt-1">Publish your carbon audit and deploy to Crusoe Cloud infrastructure.</p>
+        <p className="text-muted-foreground text-sm mt-0.5">Publish your carbon audit and deploy to Crusoe Cloud infrastructure.</p>
       </div>
 
-      <Card>
+      <Card className="card-elevated border-0">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Rocket className="h-4 w-4 text-primary" />
               Deployment
             </CardTitle>
-            <Badge variant="outline" className={cn("font-mono text-xs", cfg.className)}>
+            <Badge variant="outline" className={cn("font-mono text-xs rounded-full", cfg.className)}>
               {cfg.label}
             </Badge>
           </div>
           <CardDescription>Deploy your finalized strategy and audit certificate to Crusoe Cloud.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Logs terminal */}
           {plan && plan.logs.length > 0 && (
-            <div className="rounded-md bg-background border p-4 font-mono text-xs space-y-1.5 max-h-64 overflow-y-auto">
+            <div className="rounded-xl bg-foreground/[0.03] dark:bg-background border p-4 font-mono text-xs space-y-1.5 max-h-64 overflow-y-auto">
               {plan.logs.map((log, i) => (
                 <div key={i} className="flex items-start gap-2 animate-in fade-in duration-300">
                   <Terminal className="h-3 w-3 mt-0.5 text-primary shrink-0" />
@@ -102,31 +99,28 @@ export default function Deploy() {
             </div>
           )}
 
-          {/* Success state */}
           {status === "succeeded" && (
-            <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-primary">
+            <div className="flex items-center gap-2 rounded-xl bg-primary/5 border border-primary/20 px-4 py-3 text-sm text-primary font-medium">
               <Check className="h-4 w-4" />
               Deployment succeeded — audit certificate is live.
             </div>
           )}
 
-          {/* Failed state */}
           {status === "failed" && (
-            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            <div className="flex items-center gap-2 rounded-xl bg-destructive/5 border border-destructive/20 px-4 py-3 text-sm text-destructive">
               <ShieldAlert className="h-4 w-4" />
               Deployment failed. Please retry.
             </div>
           )}
 
-          {/* Action button */}
           {!deploying && (
-            <Button onClick={handleDeploy} className="gap-2 glow-green">
+            <Button onClick={handleDeploy} className="gap-2 rounded-xl">
               <Rocket className="h-4 w-4" />
               {status === "succeeded" ? "Re-deploy" : status === "failed" ? "Retry Deploy" : "Deploy via Crusoe"}
             </Button>
           )}
           {deploying && (
-            <Button disabled className="gap-2">
+            <Button disabled className="gap-2 rounded-xl">
               <Loader2 className="h-4 w-4 animate-spin" /> Deploying…
             </Button>
           )}
@@ -134,7 +128,7 @@ export default function Deploy() {
       </Card>
 
       <div className="flex justify-start">
-        <Button variant="outline" onClick={() => navigate("/recommendations")} className="gap-2">
+        <Button variant="outline" onClick={() => navigate("/recommendations")} className="gap-2 rounded-xl">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
       </div>
