@@ -257,6 +257,10 @@ export function createMockAdapter(): ImpactcheckClient {
     async listProjects() {
       return [...projects];
     },
+    async deleteProject(projectId) {
+      const idx = projects.findIndex(p => p.id === projectId);
+      if (idx !== -1) projects.splice(idx, 1);
+    },
 
     // Documents
     async uploadDocument(projectId, file) {

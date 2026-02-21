@@ -20,6 +20,7 @@ export interface ImpactcheckClient {
   }): Promise<Project>;
   getProject(projectId: string): Promise<Project>;
   listProjects(): Promise<Project[]>;
+  deleteProject(projectId: string): Promise<void>;
 
   // Documents
   uploadDocument(projectId: string, file: File): Promise<Document>;
