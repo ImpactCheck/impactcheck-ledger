@@ -59,6 +59,21 @@ export default function Upload() {
     return <FileTextIcon className="h-4 w-4 text-primary" />;
   };
 
+  const statusPillClass = (status: Document["status"]) => {
+    switch (status) {
+      case "ready":
+        return "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30";
+      case "processing":
+        return "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30";
+      case "error":
+        return "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30";
+      case "pending":
+        return "bg-muted text-muted-foreground border-border";
+      default:
+        return "bg-muted text-muted-foreground border-border";
+    }
+  };
+
   const extractDone = job?.status === "succeeded";
   const extractFailed = job?.status === "failed";
   const extractRunning = job?.status === "running" || job?.status === "queued";
@@ -130,15 +145,17 @@ export default function Upload() {
           <CardContent>
             <div className="space-y-2">
               {docs.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                <div key={doc.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5 text-sm">
                   <div className="flex items-center gap-2">
                     {fileIcon(doc.fileType)}
                     <span className="font-mono">{doc.filename}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Check className="h-3.5 w-3.5 text-primary" />
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusPillClass(doc.status)}`}
+                  >
+                    {doc.status === "ready" && <Check className="h-3 w-3" />}
                     {doc.status}
-                  </div>
+                  </span>
                 </div>
               ))}
             </div>

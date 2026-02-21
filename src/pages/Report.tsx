@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, AlertTriangle, Printer } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, TrendingUp, TrendingDown, Printer } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { api } from "@/api";
@@ -11,20 +11,68 @@ import { ComplianceBadge } from "@/components/ComplianceBadge";
 import { AuditCertificate } from "@/components/AuditCertificate";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
+/* Green scale for charts (matches CSS --green-*) */
 const CATEGORY_COLORS = [
-  "hsl(145 63% 42%)",
-  "hsl(200 70% 50%)",
-  "hsl(30 80% 55%)",
-  "hsl(280 60% 55%)",
-  "hsl(350 70% 55%)",
-  "hsl(60 70% 45%)",
+  "hsl(145 55% 42%)",
+  "hsl(145 45% 55%)",
+  "hsl(145 55% 32%)",
+  "hsl(145 38% 70%)",
+  "hsl(145 55% 28%)",
+  "hsl(145 40% 85%)",
 ];
+
+const CHART_GRID_LIGHT = "hsl(220 15% 92%)";
+const CHART_GRID_DARK = "hsl(220 15% 20%)";
+const CHART_TICK_LIGHT = "hsl(220 10% 45%)";
+const CHART_TICK_DARK = "hsl(215 15% 55%)";
+const TOOLTIP_BG_LIGHT = "hsl(0 0% 100%)";
+const TOOLTIP_BG_DARK = "hsl(220 18% 13%)";
+const TOOLTIP_BORDER_LIGHT = "hsl(220 15% 92%)";
+const TOOLTIP_BORDER_DARK = "hsl(220 15% 20%)";
+
+function useIsDark() {
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document === "undefined") return false;
+    return document.documentElement.classList.contains("dark");
+  });
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const root = document.documentElement;
+
+    const handleChange = () => {
+      setIsDark(root.classList.contains("dark"));
+    };
+
+    // Ensure state is in sync on mount
+    handleChange();
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.attributeName === "class") {
+          handleChange();
+          break;
+        }
+      }
+    });
+
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  return isDark;
+}
 
 export default function Report() {
   const navigate = useNavigate();
   const { project } = useProject();
   const projectId = project.currentProjectId ?? "prj_1";
   const [report, setReport] = useState<ReportType | null>(null);
+  const isDark = useIsDark();
 
   useEffect(() => {
     api.getReport(projectId).then(setReport);
@@ -38,6 +86,11 @@ export default function Report() {
   const regionCompareData = Object.entries(report.totalsByRegion).map(
     ([region, total]) => ({ region: region.replace(/_/g, " "), total })
   );
+
+  const gridStroke = isDark ? CHART_GRID_DARK : CHART_GRID_LIGHT;
+  const tickFill = isDark ? CHART_TICK_DARK : CHART_TICK_LIGHT;
+  const tooltipBg = isDark ? TOOLTIP_BG_DARK : TOOLTIP_BG_LIGHT;
+  const tooltipBorder = isDark ? TOOLTIP_BORDER_DARK : TOOLTIP_BORDER_LIGHT;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 print:space-y-4 print:max-w-none print:p-0">
@@ -71,8 +124,14 @@ export default function Report() {
                 {formatTonnes(primaryTotal)} <span className="text-lg text-muted-foreground font-normal">tonnes CO₂e</span>
               </p>
               {report.deltaVsBaselineKg !== undefined && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  {report.deltaVsBaselineKg > 0 ? "+" : ""}{formatTonnes(report.deltaVsBaselineKg)} t vs. baseline
+                <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+                  {report.deltaVsBaselineKg > 0 ? (
+                    <TrendingUp className="h-4 w-4" />
+                  ) : (
+                    <TrendingDown className="h-4 w-4" />
+                  )}
+                  {report.deltaVsBaselineKg > 0 ? "+" : ""}
+                  {formatTonnes(report.deltaVsBaselineKg)} t vs. baseline
                 </p>
               )}
             </div>
@@ -125,15 +184,32 @@ export default function Report() {
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={categories} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 20%)" />
-                  <XAxis dataKey="category" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatTonnes(v)} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                  <XAxis
+                    dataKey="category"
+                    tick={{ fill: tickFill, fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fill: tickFill, fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => formatTonnes(v)}
+                  />
                   <Tooltip
-                    contentStyle={{ backgroundColor: "hsl(220 18% 13%)", border: "1px solid hsl(220 15% 20%)", borderRadius: 8, fontSize: 12 }}
+                    contentStyle={{
+                      backgroundColor: tooltipBg,
+                      border: `1px solid ${tooltipBorder}`,
+                      borderRadius: 12,
+                      fontSize: 12,
+                    }}
                     formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
                   />
-                  <Bar dataKey="co2eKg" radius={[4, 4, 0, 0]}>
-                    {categories.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
+                  <Bar dataKey="co2eKg" radius={[6, 6, 0, 0]}>
+                    {categories.map((_, i) => (
+                      <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />
+                    ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -151,14 +227,29 @@ export default function Report() {
               <div className="h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={regionCompareData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 20%)" />
-                    <XAxis dataKey="region" tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: "hsl(215 15% 55%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatTonnes(v)} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                    <XAxis
+                      dataKey="region"
+                      tick={{ fill: tickFill, fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: tickFill, fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => formatTonnes(v)}
+                    />
                     <Tooltip
-                      contentStyle={{ backgroundColor: "hsl(220 18% 13%)", border: "1px solid hsl(220 15% 20%)", borderRadius: 8, fontSize: 12 }}
+                      contentStyle={{
+                        backgroundColor: tooltipBg,
+                        border: `1px solid ${tooltipBorder}`,
+                        borderRadius: 12,
+                        fontSize: 12,
+                      }}
                       formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
                     />
-                    <Bar dataKey="total" radius={[4, 4, 0, 0]} fill="hsl(145 63% 42%)" />
+                    <Bar dataKey="total" radius={[6, 6, 0, 0]} fill="hsl(145 55% 38%)" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

@@ -5,7 +5,82 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @layer base {
+  /* Green scale for charts and status (HSL values only) */
   :root {
+    --green-50: 145 45% 97%;
+    --green-100: 145 45% 92%;
+    --green-200: 145 40% 85%;
+    --green-300: 145 38% 70%;
+    --green-400: 145 45% 55%;
+    --green-500: 145 55% 42%;
+    --green-600: 145 55% 38%;
+    --green-700: 145 55% 32%;
+    --green-800: 145 55% 28%;
+    --green-900: 145 55% 22%;
+  }
+
+  /* Light theme (default) */
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 220 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 15%;
+
+    --primary: 145 55% 38%;
+    --primary-foreground: 0 0% 100%;
+    --primary-light: 145 45% 92%;
+    --primary-dark: 145 55% 28%;
+
+    --secondary: 220 15% 96%;
+    --secondary-foreground: 220 15% 25%;
+
+    --muted: 220 15% 96%;
+    --muted-foreground: 220 10% 45%;
+
+    --accent: 145 45% 94%;
+    --accent-foreground: 145 55% 28%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 45 90% 55%;
+    --warning-foreground: 220 20% 8%;
+
+    --success: 145 55% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 220 15% 92%;
+    --input: 220 15% 92%;
+    --ring: 145 55% 38%;
+
+    --radius: 0.75rem;
+
+    --chart-1: 145 55% 42%;
+    --chart-2: 145 45% 55%;
+    --chart-3: 145 55% 32%;
+    --chart-4: 145 40% 48%;
+    --chart-5: 145 50% 28%;
+
+    --sidebar-background: 220 15% 96%;
+    --sidebar-foreground: 220 15% 25%;
+    --sidebar-primary: 145 55% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 145 45% 92%;
+    --sidebar-accent-foreground: 145 55% 28%;
+    --sidebar-border: 220 15% 90%;
+    --sidebar-ring: 145 55% 38%;
+
+    --font-heading: 'Inter', system-ui, sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  /* Dark theme */
+  .dark {
     --background: 220 20% 10%;
     --foreground: 210 20% 90%;
 
@@ -17,6 +92,8 @@
 
     --primary: 145 63% 42%;
     --primary-foreground: 220 20% 8%;
+    --primary-light: 145 40% 25%;
+    --primary-dark: 145 63% 35%;
 
     --secondary: 220 15% 18%;
     --secondary-foreground: 210 20% 85%;
@@ -40,13 +117,11 @@
     --input: 220 15% 20%;
     --ring: 145 63% 42%;
 
-    --radius: 0.5rem;
-
     --chart-1: 145 63% 42%;
-    --chart-2: 200 70% 50%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 60% 55%;
-    --chart-5: 0 70% 50%;
+    --chart-2: 145 50% 50%;
+    --chart-3: 145 55% 35%;
+    --chart-4: 145 45% 45%;
+    --chart-5: 145 60% 30%;
 
     --sidebar-background: 220 20% 8%;
     --sidebar-foreground: 210 20% 85%;
@@ -56,10 +131,6 @@
     --sidebar-accent-foreground: 210 20% 90%;
     --sidebar-border: 220 15% 18%;
     --sidebar-ring: 145 63% 42%;
-
-    --font-heading: 'Inter', system-ui, sans-serif;
-    --font-body: 'Inter', system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
   }
 }
 
@@ -71,6 +142,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-body);
+    font-size: 15px;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -84,14 +156,21 @@
 
 @layer utilities {
   .glow-green {
-    box-shadow: 0 0 20px hsl(145 63% 42% / 0.15), 0 0 60px hsl(145 63% 42% / 0.05);
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.15), 0 0 60px hsl(var(--primary) / 0.05);
   }
 
   .glow-green-strong {
-    box-shadow: 0 0 30px hsl(145 63% 42% / 0.25), 0 0 80px hsl(145 63% 42% / 0.1);
+    box-shadow: 0 0 30px hsl(var(--primary) / 0.25), 0 0 80px hsl(var(--primary) / 0.1);
   }
 
   .text-gradient-green {
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.9), hsl(var(--primary-dark)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .dark .text-gradient-green {
     background: linear-gradient(135deg, hsl(145 63% 50%), hsl(145 63% 35%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -99,7 +178,24 @@
   }
 
   .border-glow {
-    border-color: hsl(145 63% 42% / 0.3);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  /* Green gradient backgrounds */
+  .bg-gradient-green {
+    background: linear-gradient(180deg, hsl(var(--primary) / 0.95), hsl(var(--primary-dark)));
+  }
+
+  .dark .bg-gradient-green {
+    background: linear-gradient(180deg, hsl(145 55% 38%), hsl(145 55% 22%));
+  }
+
+  .bg-gradient-green-subtle {
+    background: linear-gradient(180deg, hsl(var(--green-100)), hsl(var(--green-50)));
+  }
+
+  .dark .bg-gradient-green-subtle {
+    background: linear-gradient(180deg, hsl(var(--primary) / 0.12), hsl(var(--primary) / 0.06));
   }
 }
 
