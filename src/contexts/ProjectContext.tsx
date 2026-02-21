@@ -1,25 +1,29 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 
+export type UseCase = "company" | "investor" | "regulator" | "other";
+
 export interface ProjectConfig {
   projectName: string;
   year: number;
   regions: string[];
-  companyType: "ai_infra" | "enterprise" | "startup" | "other";
+  useCase: UseCase;
   primaryRegion: string;
   comparisonRegions: string[];
   baselineFootprintKgCO2e?: number;
   currentProjectId: string | null;
+  deployOptIn: boolean;
 }
 
 const DEFAULT_PROJECT: ProjectConfig = {
   projectName: "Untitled Project",
   year: 2026,
   regions: [],
-  companyType: "ai_infra",
+  useCase: "company",
   primaryRegion: "",
   comparisonRegions: [],
   baselineFootprintKgCO2e: undefined,
   currentProjectId: localStorage.getItem("currentProjectId"),
+  deployOptIn: false,
 };
 
 interface ProjectContextValue {

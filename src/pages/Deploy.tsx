@@ -32,7 +32,7 @@ export default function Deploy() {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  if (project.companyType !== "ai_infra") {
+  if (!project.deployOptIn) {
     return <Navigate to="/recommendations" replace />;
   }
 
