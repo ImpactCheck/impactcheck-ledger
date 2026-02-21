@@ -120,29 +120,45 @@ serve(async (req) => {
           continue;
         }
 
+        const params = buildParameters(act, searchResult.factor);
         const estimateResult = await estimateSingle(
           CLIMATIQ_API_KEY!,
           searchResult.factor.activity_id,
-          buildParameters(act, searchResult.factor),
+          params,
           region
         );
 
         if (estimateResult.error) {
-          // Retry without region
-          const retryResult = await estimateSingle(
-            CLIMATIQ_API_KEY!,
-            searchResult.factor.activity_id,
-            buildParameters(act, searchResult.factor),
-            null
-          );
+          // Try multiple recovery strategies
+          let retryResult: EstimateResult | null = null;
 
-          if (retryResult.error) {
-            console.error(`Estimate failed for ${searchResult.factor.activity_id}:`, retryResult.error);
-            estimates.push(fallbackEstimate(projectId, act, searchResult.factor, searchResult.confidence * 0.5));
-            continue;
+          // Strategy 1: adapt parameters based on error's valid_values
+          const validTypes1 = parseValidUnitTypes(estimateResult.error);
+          if (validTypes1.length > 0) {
+            const adapted = adaptParametersToValidTypes(act, validTypes1);
+            if (adapted) {
+              retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, adapted, region);
+              if (retryResult.error) retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, adapted, null);
+              if (!retryResult.error) { estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.7)); continue; }
+            }
           }
 
-          estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.8));
+          // Strategy 2: retry without region (original params)
+          retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, params, null);
+          if (!retryResult.error) { estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.8)); continue; }
+
+          // Strategy 3: adapt parameters from strategy 2's error
+          const validTypes2 = parseValidUnitTypes(retryResult.error!);
+          if (validTypes2.length > 0) {
+            const adapted2 = adaptParametersToValidTypes(act, validTypes2);
+            if (adapted2) {
+              retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, adapted2, null);
+              if (!retryResult.error) { estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.6)); continue; }
+            }
+          }
+
+          console.error(`Estimate failed for ${searchResult.factor.activity_id}:`, retryResult?.error || estimateResult.error);
+          estimates.push(fallbackEstimate(projectId, act, searchResult.factor, searchResult.confidence * 0.5));
         } else {
           estimates.push(buildEstimateRow(projectId, act, estimateResult, searchResult.factor, searchResult.confidence));
         }
@@ -415,6 +431,32 @@ function buildParameters(act: any, factor: any): any {
   return { weight: 1, weight_unit: "kg" };
 }
 
+// ─── Error-driven parameter adaptation ──────────────────
+
+function parseValidUnitTypes(errorText: string): string[] {
+  try {
+    const parsed = typeof errorText === "string" ? JSON.parse(errorText) : errorText;
+    return parsed?.valid_values?.unit_type || [];
+  } catch { return []; }
+}
+
+function adaptParametersToValidTypes(act: any, validTypes: string[]): any | null {
+  const qty = act.quantity || act.amount || 1;
+  for (const vt of validTypes) {
+    const lt = vt.toLowerCase();
+    if (lt === "distance") return { distance: qty, distance_unit: mapDistanceUnit(act.unit) };
+    if (lt === "weight") return { weight: qty, weight_unit: mapWeightUnit(act.unit) };
+    if (lt === "energy") return { energy: qty, energy_unit: mapEnergyUnit(act.unit) };
+    if (lt === "volume") return { volume: qty, volume_unit: mapVolumeUnit(act.unit) };
+    if (lt === "money") return { money: qty, money_unit: (act.currency || "usd").toLowerCase() };
+    if (lt === "number") return { number: qty };
+    if (lt === "numberovertime") return { number: qty, time: 1, time_unit: "year" };
+    if (lt === "time") return { time: qty, time_unit: act.unit || "hour" };
+    if (lt === "area") return { area: qty, area_unit: act.unit || "m2" };
+  }
+  return null;
+}
+
 // ─── Stub mode ──────────────────────────────────────────
 
 function stubEstimate(act: any, searchQuery: string) {
@@ -514,6 +556,7 @@ function mapRegionToClimatiq(region: string): string {
     us_west: "US-CA", us_east: "US-VA", europe: "EU", uk: "GB",
     germany: "DE", france: "FR", australia: "AU", japan: "JP",
     china: "CN", india: "IN", brazil: "BR", canada: "CA", global: "GLOBAL",
+    US: "US", us: "US",
   };
   return map[region] || "GLOBAL";
 }
