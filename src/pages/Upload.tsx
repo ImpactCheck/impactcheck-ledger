@@ -67,8 +67,6 @@ export default function Upload() {
         return "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30";
       case "error":
         return "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30";
-      case "pending":
-        return "bg-muted text-muted-foreground border-border";
       default:
         return "bg-muted text-muted-foreground border-border";
     }
