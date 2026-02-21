@@ -31,8 +31,40 @@ const TOOLTIP_BORDER_LIGHT = "hsl(220 15% 92%)";
 const TOOLTIP_BORDER_DARK = "hsl(220 15% 20%)";
 
 function useIsDark() {
-  if (typeof document === "undefined") return false;
-  return document.documentElement.classList.contains("dark");
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document === "undefined") return false;
+    return document.documentElement.classList.contains("dark");
+  });
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const root = document.documentElement;
+
+    const handleChange = () => {
+      setIsDark(root.classList.contains("dark"));
+    };
+
+    // Ensure state is in sync on mount
+    handleChange();
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.attributeName === "class") {
+          handleChange();
+          break;
+        }
+      }
+    });
+
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  return isDark;
 }
 
 export default function Report() {
