@@ -1,7 +1,8 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useProject } from "@/contexts/ProjectContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { Leaf, Settings, Upload, Activity, GitMerge, FileText, Lightbulb, Rocket, Check, ChevronRight, Sun, Moon, LayoutDashboard } from "lucide-react";
+import { Settings, Upload, Activity, GitMerge, FileText, Lightbulb, Rocket, Check, ChevronRight, Sun, Moon, LayoutDashboard } from "lucide-react";
+import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 
 interface Step {
@@ -39,8 +40,8 @@ export default function DashboardLayout() {
       <aside className="w-[272px] shrink-0 hidden md:flex flex-col bg-sidebar border-r border-sidebar-border sticky top-0 h-screen">
         {/* Logo */}
         <div className="px-6 py-6 flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-green flex items-center justify-center shadow-md">
-            <Leaf className="h-5 w-5 text-primary-foreground" />
+          <div className="h-10 w-10 rounded-2xl overflow-hidden shadow-md">
+            <img src={logoImg} alt="ImpactCheck" className="h-10 w-10 object-cover" />
           </div>
           <div>
             <span className="text-lg font-bold tracking-tight text-foreground">
