@@ -71,27 +71,44 @@ async function runExtraction(
 
     await supabase.from("jobs").update({ progress: 15, stage: "reading_files", message: `Reading ${docs.length} document(s)…` }).eq("id", jobId);
 
-    // Download document contents
-    const docTexts: { docId: string; filename: string; content: string }[] = [];
+    // Download document contents — PDFs as base64 inline data, text files as text
+    const geminiParts: any[] = [];
+    const docIdMap: { docId: string; filename: string }[] = [];
+
     for (const doc of docs) {
-      if (doc.storage_path) {
-        const { data: fileData } = await supabase.storage.from("documents").download(doc.storage_path);
-        if (fileData) {
-          const text = await fileData.text();
-          docTexts.push({ docId: doc.id, filename: doc.filename, content: text.slice(0, 20000) });
-        }
+      if (!doc.storage_path) continue;
+      const { data: fileData } = await supabase.storage.from("documents").download(doc.storage_path);
+      if (!fileData) continue;
+
+      const idx = docIdMap.length;
+      docIdMap.push({ docId: doc.id, filename: doc.filename });
+      const ext = (doc.file_type || doc.filename.split(".").pop() || "").toLowerCase();
+
+      if (ext === "pdf") {
+        // Send PDF as base64 inline data so Gemini can parse it natively
+        const arrayBuf = await fileData.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuf);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const b64 = btoa(binary);
+        geminiParts.push({ inlineData: { mimeType: "application/pdf", data: b64 } });
+        geminiParts.push({ text: `[Document ${idx}: ${doc.filename}]` });
+      } else {
+        // Text-based: CSV, JSON, TXT, etc.
+        const text = await fileData.text();
+        geminiParts.push({ text: `[Document ${idx}: ${doc.filename}]\n${text.slice(0, 30000)}` });
       }
     }
 
-    if (docTexts.length === 0) {
+    if (geminiParts.length === 0) {
       await supabase.from("jobs").update({ status: "failed", message: "Could not read any documents", progress: 100, stage: "done" }).eq("id", jobId);
       return;
     }
 
     await supabase.from("jobs").update({ progress: 30, stage: "extracting", message: "Sending documents to Gemini…" }).eq("id", jobId);
 
-    // Build prompt optimized for Climatiq Search API
-    const prompt = `You are a carbon emissions data extraction specialist. Your job is to extract emission-producing activities from documents and prepare them for the Climatiq emissions database Search API.
+    // Append the extraction prompt after the document parts so Gemini reads docs first
+    const extractionPrompt = `You are a carbon emissions data extraction specialist. Your job is to extract emission-producing activities from documents and prepare them for the Climatiq emissions database Search API.
 
 CRITICAL RULES FOR search_query:
 The Climatiq Search API uses fuzzy text matching against emission factor names. Long verbose strings perform POORLY. Each search_query MUST be 2-5 generic material/activity keywords.
@@ -138,10 +155,9 @@ Return a JSON array of objects. Each object must have:
 - source_page: Page/row reference string or null
 - note: Any additional context or null
 
-Return ONLY valid JSON array, no markdown fences, no explanation.
+Return ONLY valid JSON array, no markdown fences, no explanation.`;
 
-Documents:
-${docTexts.map((d, i) => `--- Document ${i}: ${d.filename} ---\n${d.content}`).join("\n\n")}`;
+    geminiParts.push({ text: extractionPrompt });
 
     await supabase.from("jobs").update({ progress: 45, stage: "parsing", message: "Gemini is analysing your documents…" }).eq("id", jobId);
 
@@ -151,7 +167,7 @@ ${docTexts.map((d, i) => `--- Document ${i}: ${d.filename} ---\n${d.content}`).j
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts: geminiParts }],
           generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
         }),
       }
@@ -205,7 +221,7 @@ ${docTexts.map((d, i) => `--- Document ${i}: ${d.filename} ---\n${d.content}`).j
         unit: a.unit || null,
         amount: a.amount || null,
         currency: a.currency || null,
-        source_document_id: a.source_doc_index != null ? docTexts[a.source_doc_index]?.docId : null,
+        source_document_id: a.source_doc_index != null && a.source_doc_index < docIdMap.length ? docIdMap[a.source_doc_index]?.docId : null,
         source_page: a.source_page || null,
         category: a.category || null,
         confidence: a.confidence || null,
