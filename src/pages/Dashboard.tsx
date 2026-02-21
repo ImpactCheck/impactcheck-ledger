@@ -79,9 +79,7 @@ export default function Dashboard() {
       <header className="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-gradient-green flex items-center justify-center shadow-md overflow-hidden">
-              <img src={logoImg} alt="ImpactCheck" className="h-10 w-10 object-cover" />
-            </div>
+            <img src={logoImg} alt="ImpactCheck" className="h-10 w-10 object-contain" />
             <span className="text-xl font-bold tracking-tight">ImpactCheck</span>
             <span className="text-[9px] uppercase tracking-widest text-muted-foreground bg-muted rounded-full px-2.5 py-0.5 font-semibold">
               v2
