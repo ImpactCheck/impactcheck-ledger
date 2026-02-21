@@ -81,9 +81,9 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <img src={logoImg} alt="ImpactCheck" className="h-10 w-10 object-contain" />
             <span className="text-xl font-bold tracking-tight">ImpactCheck</span>
-            <span className="text-[9px] uppercase tracking-widest text-muted-foreground bg-muted rounded-full px-2.5 py-0.5 font-semibold">
-              v2
-            </span>
+            
+
+
           </div>
           <button
             onClick={toggleTheme}
