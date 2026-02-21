@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Loader2, Check, AlertCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Check, AlertCircle, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { api } from "@/api";
@@ -10,12 +10,15 @@ import { formatTonnes } from "@/contracts/impactcheck.v2";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useStepCompletion } from "@/hooks/useStepCompletion";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function Mapping() {
   const navigate = useNavigate();
   const { project } = useProject();
   const projectId = project.currentProjectId ?? "prj_1";
-
+  const completion = useStepCompletion();
+  const canRunMapping = completion.setup && completion.upload && completion.activities;
   const allRegions = [project.primaryRegion, ...project.comparisonRegions].filter(Boolean);
   const isMultiRegion = allRegions.length > 1;
 
@@ -71,6 +74,14 @@ export default function Mapping() {
           <CardDescription>Match each activity to emission factors and compute CO₂e estimates.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!canRunMapping && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                Complete the previous steps (Setup, Upload, and Activities) before running the mapping.
+              </AlertDescription>
+            </Alert>
+          )}
           {job && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
@@ -91,7 +102,7 @@ export default function Mapping() {
             </div>
           )}
           {!jobRunning && (
-            <Button onClick={handleMapping} className="gap-2 rounded-xl" disabled={jobRunning}>
+            <Button onClick={handleMapping} className="gap-2 rounded-xl" disabled={jobRunning || !canRunMapping}>
               {hasEstimates ? "Re-run Mapping" : "Run Climatiq Mapping"}
             </Button>
           )}
