@@ -53,31 +53,41 @@ export default function Benchmarking() {
     return Object.keys(report.totalsByRegion)[0] ?? project.primaryRegion ?? "";
   }, [report, project.primaryRegion]);
 
-  /* Computed yearly total: sum of ALL estimates (matches Emissions page "Total CO₂e / yr") */
-  const computedYearlyTotal = useMemo(
-    () => estimates.reduce((s, e) => s + e.co2eKg, 0),
-    [estimates]
+  /* Phase totals from report: embodied (Year 1 only) + operational (annual) */
+  const phaseTotals = useMemo(
+    () => report?.phaseTotalsByRegion?.[primaryRegion] ?? { embodied: 0, operational: 0 },
+    [report, primaryRegion]
   );
-  const renewablePct = RENEWABLE_MIX[primaryRegion] ?? 20;
-  const embodiedPct = estimates.length > 0 ? 38 : 0; // industry baseline comparison
+  const firstYearTotalKg = phaseTotals.embodied + phaseTotals.operational;
+  const annualTotalKg = phaseTotals.operational;
 
-  /* Carbon intensity: total CO₂e / number of estimates as proxy for activity count */
-  const projectIntensity = estimates.length > 0
-    ? parseFloat((computedYearlyTotal / 1000 / estimates.length).toFixed(3))
+  const renewablePct = RENEWABLE_MIX[primaryRegion] ?? 20;
+  const embodiedPct = firstYearTotalKg > 0
+    ? Math.round((phaseTotals.embodied / firstYearTotalKg) * 100)
+    : 0;
+
+  /* Carbon intensity: t CO₂e per activity — Year 1 and Annual */
+  const activityCount = estimates.length || 1;
+  const year1Intensity = activityCount > 0
+    ? parseFloat((firstYearTotalKg / 1000 / activityCount).toFixed(3))
+    : 0;
+  const annualIntensity = activityCount > 0
+    ? parseFloat((annualTotalKg / 1000 / activityCount).toFixed(3))
     : 0;
 
   const benchmarkData = [
-    { name: "Your Project", value: projectIntensity, color: "hsl(var(--primary))" },
+    { name: "Your Project (Year 1)", value: year1Intensity, color: "hsl(var(--primary))" },
+    { name: "Your Project (Annual)", value: annualIntensity, color: "hsl(200 65% 55%)" },
     ...INDUSTRY_BENCHMARKS,
   ];
 
-  /* Trajectory chart: baseline (flat) + computed yearly actual */
-  const baselineKg = project.baselineFootprintKgCO2e ?? computedYearlyTotal * 1.15;
+  /* Multi-year trajectory: Year 1 (embodied+ops) → recurring years (ops only) */
+  const baselineKg = project.baselineFootprintKgCO2e ?? firstYearTotalKg * 1.15;
   const trajectoryData = [
-    { quarter: "Q1 Baseline", actual: baselineKg / 1000, baseline: baselineKg / 1000 },
-    { quarter: "Q2",          actual: baselineKg / 1000 * 0.95, baseline: baselineKg / 1000 },
-    { quarter: "Q3",          actual: computedYearlyTotal / 1000 * 0.9,  baseline: baselineKg / 1000 },
-    { quarter: "Q4 Current",  actual: computedYearlyTotal / 1000, baseline: baselineKg / 1000 },
+    { period: "Year 1", actual: firstYearTotalKg / 1000, baseline: baselineKg / 1000 },
+    { period: "Year 2", actual: annualTotalKg / 1000, baseline: baselineKg / 1000 },
+    { period: "Year 3", actual: annualTotalKg / 1000, baseline: baselineKg / 1000 },
+    { period: "Year 4+", actual: annualTotalKg / 1000, baseline: baselineKg / 1000 },
   ];
 
   const aiTip = renewablePct >= 80
@@ -114,7 +124,7 @@ export default function Benchmarking() {
             <CardHeader>
               <CardTitle className="text-lg">Carbon Intensity Comparison</CardTitle>
               <CardDescription>
-                t CO₂e per emission activity — {REGION_LABELS[primaryRegion] ?? (primaryRegion || "Your Region")}
+                t CO₂e per emission activity — Year 1 vs recurring annual — {REGION_LABELS[primaryRegion] ?? (primaryRegion || "Your Region")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -141,7 +151,11 @@ export default function Benchmarking() {
               <div className="flex flex-wrap gap-4 mt-3 text-[11px] text-muted-foreground">
                 <div className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: "hsl(var(--primary))" }} />
-                  Your Project
+                  Your Project (Year 1)
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: "hsl(200 65% 55%)" }} />
+                  Your Project (Annual)
                 </div>
                 {INDUSTRY_BENCHMARKS.map((b) => (
                   <div key={b.name} className="flex items-center gap-1.5">
@@ -156,15 +170,15 @@ export default function Benchmarking() {
           {/* Trajectory chart */}
           <Card className="card-elevated border-0">
             <CardHeader>
-              <CardTitle className="text-lg">Historical Trajectory vs Baseline</CardTitle>
-              <CardDescription>Quarterly progress against your baseline footprint (t CO₂e)</CardDescription>
+              <CardTitle className="text-lg">Year 1 vs Recurring Years</CardTitle>
+              <CardDescription>First year (embodied + operational) vs annual footprint (operational only) — t CO₂e</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={trajectoryData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="quarter" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="period" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false}
                       tickFormatter={(v) => `${v.toFixed(0)} t`}
                     />
@@ -216,8 +230,8 @@ export default function Benchmarking() {
             <InsightCard
               icon={<TrendingDown className="h-3.5 w-3.5" />}
               title="Embodied Carbon"
-              value={estimates.length > 0 ? `${embodiedPct}%` : "—"}
-              sub="Year 1 only · vs 38% industry baseline"
+              value={firstYearTotalKg > 0 ? `${embodiedPct}%` : "—"}
+              sub="Year 1 only · % of first-year total"
               color="text-amber-500"
               bgColor="bg-amber-500/10"
             />
@@ -251,11 +265,17 @@ export default function Benchmarking() {
               </div>
             </div>
 
-            {/* Computed yearly total (matches Emissions page) */}
-            {computedYearlyTotal > 0 && (
-              <div className="pt-3 border-t border-border">
-                <p className="text-[10px] text-muted-foreground">Computed yearly total</p>
-                <p className="text-lg font-bold font-mono text-primary">{formatTonnes(computedYearlyTotal)} t</p>
+            {/* Year 1 and Annual totals */}
+            {firstYearTotalKg > 0 && (
+              <div className="pt-3 border-t border-border space-y-2">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Year 1 total (embodied + ops)</p>
+                  <p className="text-lg font-bold font-mono text-primary">{formatTonnes(firstYearTotalKg)} t</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Annual (recurring years)</p>
+                  <p className="text-base font-bold font-mono text-foreground">{formatTonnes(annualTotalKg)} t/yr</p>
+                </div>
               </div>
             )}
           </div>
