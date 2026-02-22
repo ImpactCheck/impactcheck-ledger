@@ -96,55 +96,6 @@ def _estimate_from_cache(activity_id: str, cached: dict) -> ActivityEstimate:
     )
 
 
-def _make_zero_estimate(
-    activity: ExtractedActivity,
-) -> ActivityEstimate:
-    return ActivityEstimate(
-        activityId=activity.id,
-        region=activity.region,
-        matchedFactor=MatchedFactor(
-            id="unmatched", name="No factor matched", source="N/A", year=None, unit=None
-        ),
-        confidence=0.2,
-        co2eKg=0.0,
-        inputUsed=EstimateInputUsed(
-            unit_type=activity.unit_type,
-            quantity=activity.quantity,
-            amount=activity.amount,
-            currency=activity.currency,
-        ),
-        mapping_confidence="low",
-    )
-
-
-def _make_needs_quantity_estimate(
-    activity: ExtractedActivity,
-    factor: dict[str, Any],
-    confidence_level: str,
-) -> ActivityEstimate:
-    return ActivityEstimate(
-        activityId=activity.id,
-        region=activity.region,
-        matchedFactor=MatchedFactor(
-            id=factor.get("activity_id", "unknown"),
-            name=factor.get("name", "Unknown"),
-            source=factor.get("source", "N/A"),
-            year=factor.get("year"),
-            unit=_factor_unit(factor),
-        ),
-        confidence=CONFIDENCE_FROM_LEVEL.get(confidence_level, 0.55) * 0.5,
-        co2eKg=0.0,
-        inputUsed=EstimateInputUsed(
-            unit_type=activity.unit_type,
-            quantity=None,
-            amount=None,
-            currency=None,
-            note="needs_quantity",
-        ),
-        mapping_confidence=confidence_level,
-    )
-
-
 _CLIMATIQ_UT_MAP: dict[str, str] = {
     "weight": "Weight",
     "energy": "Energy",
@@ -226,26 +177,28 @@ def _make_gemini_estimate(
     activity: ExtractedActivity,
     factor: dict[str, Any] | None,
     co2e_kg: float,
+    *,
+    note: str = "gemini_fallback",
 ) -> ActivityEstimate:
-    """Build an ActivityEstimate from a Gemini-generated CO2e value."""
+    """Build an ActivityEstimate from a Gemini-generated or minimum-fallback CO2e value."""
     return ActivityEstimate(
         activityId=activity.id,
         region=activity.region,
         matchedFactor=MatchedFactor(
-            id=factor.get("activity_id", "gemini-estimate") if factor else "gemini-estimate",
-            name=factor.get("name", "Gemini AI Estimate") if factor else "Gemini AI Estimate",
-            source="Gemini AI",
+            id=factor.get("activity_id", "gemini-estimate") if factor else "minimum-fallback",
+            name=factor.get("name", "Gemini AI Estimate") if factor else "Minimum estimate (no API data)",
+            source="Gemini AI" if note == "gemini_fallback" else "N/A",
             year=None,
             unit=_factor_unit(factor) if factor else None,
         ),
-        confidence=0.45,
+        confidence=0.45 if note == "gemini_fallback" else 0.2,
         co2eKg=co2e_kg,
         inputUsed=EstimateInputUsed(
             unit_type=activity.unit_type,
             quantity=activity.quantity,
             amount=activity.amount,
             currency=activity.currency,
-            note="gemini_fallback",
+            note=note,
         ),
         mapping_confidence="low",
     )
@@ -375,7 +328,7 @@ def run_mapping_pipeline(
                 if co2e is not None and co2e > 0:
                     estimates_out.append(_make_gemini_estimate(activity, None, co2e))
                     continue
-            estimates_out.append(_make_zero_estimate(activity))
+            estimates_out.append(_make_gemini_estimate(activity, None, 1.0, note="minimum_fallback"))
             continue
 
         if activity.quantity is None and activity.amount is None:
@@ -393,7 +346,7 @@ def run_mapping_pipeline(
                 if co2e is not None and co2e > 0:
                     estimates_out.append(_make_gemini_estimate(activity, factor, co2e))
                     continue
-            estimates_out.append(_make_needs_quantity_estimate(activity, factor, confidence_level))
+            estimates_out.append(_make_gemini_estimate(activity, factor, 1.0, note="minimum_fallback"))
             continue
 
         factor_unit_types = factor.get("unit_type")
@@ -471,17 +424,39 @@ def run_mapping_pipeline(
                         estimates_out.append(_make_gemini_estimate(activity, factor, co2e))
                         continue
 
-                # Step 3: Zero estimate with reduced confidence
+                # Step 3: Zero never acceptable — use minimum when no Gemini key
                 estimates_out.append(
-                    _build_estimate(activity, factor, {}, 0.0, confidence_level, confidence_mult=0.5)
+                    _build_estimate(activity, factor, {}, 1.0, confidence_level, confidence_mult=0.5)
                 )
                 continue
 
             co2e_kg = result.co2e  # always kg_co2e from Climatiq
-            _store_cache(cache_key, activity, factor, result.emission_factor, co2e_kg, confidence_level)
-            estimates_out.append(
-                _build_estimate(activity, factor, result.emission_factor, co2e_kg, confidence_level)
-            )
+            if co2e_kg <= 0:
+                if gemini_api_key:
+                    fallback_co2e = estimate_co2e_with_gemini(
+                        gemini_api_key,
+                        activity.text,
+                        activity.quantity,
+                        activity.unit,
+                        activity.unit_type,
+                        factor_name=factor.get("name"),
+                        factor_unit=_factor_unit(factor),
+                        doc_parts=doc_parts,
+                    )
+                    if fallback_co2e is not None and fallback_co2e > 0:
+                        co2e_kg = fallback_co2e
+                        estimates_out.append(_make_gemini_estimate(activity, factor, co2e_kg))
+                    else:
+                        co2e_kg = 1.0
+                        estimates_out.append(_make_gemini_estimate(activity, factor, 1.0, note="minimum_fallback"))
+                else:
+                    co2e_kg = 1.0
+                    estimates_out.append(_make_gemini_estimate(activity, factor, 1.0, note="minimum_fallback"))
+            else:
+                _store_cache(cache_key, activity, factor, result.emission_factor, co2e_kg, confidence_level)
+                estimates_out.append(
+                    _build_estimate(activity, factor, result.emission_factor, co2e_kg, confidence_level)
+                )
 
         # Report progress at the end of each chunk
         pct_after = 50 + int((chunk_end / max(1, n_to_estimate)) * 35)

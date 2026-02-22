@@ -140,30 +140,37 @@ async function runSimulation(
           const searchResult = await searchFactors(CLIMATIQ_API_KEY!, searchQuery, region, act.unit_type);
 
           if (!searchResult.factor) {
-            estimates.push({
-              ...fallbackEstimate(projectId, act, null, searchResult.confidence, regionKey),
-              simulation_region: regionKey,
-            });
+            const llmCo2e = await llmEstimateCo2e(act, null, regionKey);
+            if (llmCo2e != null && llmCo2e > 0) {
+              estimates.push({ ...buildLlmEstimateRow(projectId, act, llmCo2e, null, regionKey), simulation_region: regionKey });
+            } else {
+              estimates.push({ ...fallbackEstimate(projectId, act, null, searchResult.confidence, regionKey), simulation_region: regionKey });
+            }
             continue;
           }
 
           if (!act.quantity && !act.amount) {
-            estimates.push({
-              project_id: projectId,
-              activity_id: act.id,
-              simulation_region: regionKey,
-              region: regionKey,
-              matched_factor: {
-                id: searchResult.factor.activity_id,
-                name: searchResult.factor.name,
-                source: searchResult.factor.source,
-                year: searchResult.factor.year,
-                unit: toUnitTypeArray(searchResult.factor.unit_type)[0] ?? null,
-              },
-              confidence: searchResult.confidence * 0.5,
-              co2e_kg: 0,
-              input_used: { unit_type: act.unit_type, quantity: null, amount: null, note: "needs_quantity" },
-            });
+            const llmCo2e = await llmEstimateCo2e(act, searchResult.factor, regionKey);
+            if (llmCo2e != null && llmCo2e > 0) {
+              estimates.push({ ...buildLlmEstimateRow(projectId, act, llmCo2e, searchResult.factor, regionKey), simulation_region: regionKey });
+            } else {
+              estimates.push({
+                project_id: projectId,
+                activity_id: act.id,
+                simulation_region: regionKey,
+                region: regionKey,
+                matched_factor: {
+                  id: searchResult.factor.activity_id,
+                  name: searchResult.factor.name,
+                  source: searchResult.factor.source,
+                  year: searchResult.factor.year,
+                  unit: toUnitTypeArray(searchResult.factor.unit_type)[0] ?? null,
+                },
+                confidence: searchResult.confidence * 0.5,
+                co2e_kg: 1,
+                input_used: { unit_type: act.unit_type, quantity: null, amount: null, note: "needs_quantity" },
+              });
+            }
             continue;
           }
 
@@ -201,13 +208,32 @@ async function runSimulation(
                 if (!retryResult.error) { estimates.push({ ...buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.5, regionKey), simulation_region: regionKey }); continue; }
               }
             }
-            estimates.push({ ...fallbackEstimate(projectId, act, searchResult.factor, searchResult.confidence * 0.5, regionKey), simulation_region: regionKey });
+            const llmCo2e = await llmEstimateCo2e(act, searchResult.factor, regionKey);
+            if (llmCo2e != null && llmCo2e > 0) {
+              estimates.push({ ...buildLlmEstimateRow(projectId, act, llmCo2e, searchResult.factor, regionKey), simulation_region: regionKey });
+            } else {
+              estimates.push({ ...fallbackEstimate(projectId, act, searchResult.factor, searchResult.confidence * 0.5, regionKey), simulation_region: regionKey });
+            }
           } else {
-            estimates.push({ ...buildEstimateRow(projectId, act, estimateResult, searchResult.factor, searchResult.confidence, regionKey), simulation_region: regionKey });
+            if (estimateResult.co2e_kg <= 0) {
+              const llmCo2e = await llmEstimateCo2e(act, searchResult.factor, regionKey);
+              if (llmCo2e != null && llmCo2e > 0) {
+                estimates.push({ ...buildLlmEstimateRow(projectId, act, llmCo2e, searchResult.factor, regionKey), simulation_region: regionKey });
+              } else {
+                estimates.push({ ...buildLlmEstimateRow(projectId, act, 1, searchResult.factor, regionKey), simulation_region: regionKey });
+              }
+            } else {
+              estimates.push({ ...buildEstimateRow(projectId, act, estimateResult, searchResult.factor, searchResult.confidence, regionKey), simulation_region: regionKey });
+            }
           }
         } catch (err) {
           console.error(`Error simulating activity ${act.id}:`, err);
-          estimates.push({ ...fallbackEstimate(projectId, act, null, 0.2, regionKey), simulation_region: regionKey });
+          const llmCo2e = await llmEstimateCo2e(act, null, regionKey);
+          if (llmCo2e != null && llmCo2e > 0) {
+            estimates.push({ ...buildLlmEstimateRow(projectId, act, llmCo2e, null, regionKey), simulation_region: regionKey });
+          } else {
+            estimates.push({ ...fallbackEstimate(projectId, act, null, 0.2, regionKey), simulation_region: regionKey });
+          }
         }
       }
     }
@@ -368,8 +394,8 @@ function fallbackEstimate(projectId: string, act: any, factor: any | null, confi
     region: regionKey ?? act.region,
     matched_factor: factor ? { id: factor.activity_id, name: factor.name, source: factor.source, year: factor.year, unit: toUnitTypeArray(factor.unit_type)[0] ?? null } : { id: "no_match", name: "No match found", source: "N/A" },
     confidence,
-    co2e_kg: 0,
-    input_used: { unit_type: act.unit_type, quantity: act.quantity, amount: act.amount, currency: act.currency },
+    co2e_kg: 1,
+    input_used: { unit_type: act.unit_type, quantity: act.quantity, amount: act.amount, currency: act.currency, note: "minimum_fallback" },
   };
 }
 
@@ -408,6 +434,63 @@ function adaptParametersToValidTypes(act: any, validTypes: string[]): any | null
   return null;
 }
 
+const GEMINI_ESTIMATION_MODEL = "gemini-3.1-pro-preview";
+const GEMINI_FLASH_MODEL = "gemini-3-flash-preview";
+
+async function llmEstimateCo2e(act: any, factor: any | null, regionKey: string): Promise<number | null> {
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) return null;
+  const quantityStr = act.quantity != null ? `${act.quantity} ${act.unit || act.unit_type || ""}`.trim() : "unknown — use a typical representative amount";
+  const factorLine = factor ? `Best matched emission factor: ${factor.name}${factor.unit_type ? ` (unit: ${toUnitTypeArray(factor.unit_type)[0]})` : ""}` : "No Climatiq factor matched — estimate from activity type.";
+  const prompt = `You are a carbon footprint expert specialising in AI data-center infrastructure.
+Estimate the TOTAL annual CO2e emissions in kilograms (kg CO2 equivalent) for the activity described below.
+
+Activity: ${act.text}
+Quantity: ${quantityStr}
+${factorLine}
+
+CRITICAL — NEVER RETURN ZERO:
+- You MUST provide a positive CO2e estimate. Zero is NEVER acceptable.
+- Every physical activity has a carbon footprint. Use industry benchmarks, typical values, or conservative engineering estimates when exact data is unavailable.
+
+ANNUALISATION RULES:
+- EMBODIED (one-time): divide lifetime emissions by asset lifetime (e.g. GPU ~1,500 kgCO2e, 5yr → 300 kg/yr).
+- OPERATIONAL: scale to full year. Electricity: use grid intensity (texas ~0.39, virginia ~0.32, global ~0.45 kgCO2e/kWh). Power in kW: ×8760 h/year.
+- Diesel: 2.68 kgCO2e/litre. Natural gas: 2.04 kgCO2e/m³.
+
+Respond with ONLY a JSON object (no markdown): {"co2e_kg": <number>, "confidence": "high|medium|low", "rationale": "<one sentence>"}`;
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_ESTIMATION_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 512, response_mime_type: "application/json" } }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]);
+    const co2e = parseFloat(parsed?.co2e_kg);
+    if (co2e > 0) return co2e;
+    return 1.0;
+  } catch {
+    return 1.0;
+  }
+}
+
+function buildLlmEstimateRow(projectId: string, act: any, co2eKg: number, factor: any | null, regionKey: string) {
+  return {
+    project_id: projectId,
+    activity_id: act.id,
+    region: regionKey,
+    matched_factor: { id: factor?.activity_id || "gemini-estimate", name: factor?.name || "Gemini AI Estimate", source: factor?.source || "Gemini AI", year: factor?.year ?? null, unit: factor != null ? (toUnitTypeArray(factor.unit_type)[0] ?? null) : null },
+    confidence: 0.45,
+    co2e_kg: co2eKg,
+    input_used: { unit_type: act.unit_type, quantity: act.quantity, amount: act.amount, currency: act.currency, note: "gemini_fallback" },
+  };
+}
+
 async function llmConvertUnits(act: any, validTypes: string[]): Promise<any | null> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
   if (!GEMINI_API_KEY) return null;
@@ -415,7 +498,7 @@ async function llmConvertUnits(act: any, validTypes: string[]): Promise<any | nu
     const prompt = `Convert this activity data to one of these Climatiq parameter types: ${validTypes.join(", ")}.
 Activity: "${act.text}", quantity=${act.quantity}, unit="${act.unit}", unit_type="${act.unit_type}", amount=${act.amount}, currency="${act.currency}".
 Return ONLY a JSON object with the converted parameters (e.g. {"energy": 100, "energy_unit": "kWh"}).`;
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_FLASH_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0, maxOutputTokens: 200 } }),
