@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import DashboardLayout from "@/layouts/DashboardLayout";
+import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import Setup from "@/pages/Setup";
 import Upload from "@/pages/Upload";
@@ -26,7 +27,8 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Landing />} />
+            <Route path="/app" element={<Dashboard />} />
             <Route element={<DashboardLayout />}>
               <Route path="/setup" element={<Setup />} />
               <Route path="/upload" element={<Upload />} />
