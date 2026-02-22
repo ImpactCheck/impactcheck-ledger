@@ -6,6 +6,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function formatJob(j: any) {
+  return {
+    id: j.id,
+    type: j.type,
+    status: j.status,
+    progress: j.progress,
+    stage: j.stage,
+    message: j.message,
+    createdAt: j.created_at,
+    updatedAt: j.updated_at,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -21,8 +34,8 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Finalize action — synchronous, no job needed
     if (action === "finalize") {
-      // Finalize strategy
       const { data: recs } = await supabase
         .from("recommendations")
         .select("*")
@@ -37,7 +50,48 @@ serve(async (req) => {
       });
     }
 
-    // Generate recommendations
+    // Generate recommendations — job-based, async
+    const { data: job, error: jobErr } = await supabase
+      .from("jobs")
+      .insert({
+        project_id: projectId,
+        type: "recommendations",
+        status: "running",
+        progress: 5,
+        stage: "loading_data",
+      })
+      .select()
+      .single();
+    if (jobErr) throw jobErr;
+
+    const work = runRecommendations(job.id, projectId, supabase, GEMINI_API_KEY);
+    // @ts-ignore — EdgeRuntime.waitUntil keeps the function alive after the response is sent.
+    if (typeof EdgeRuntime !== "undefined") {
+      EdgeRuntime.waitUntil(work);
+    } else {
+      work.catch((e) => console.error("Background recommendations error:", e));
+    }
+
+    return new Response(JSON.stringify(formatJob(job)), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("recommendations error:", e);
+    return new Response(
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});
+
+async function runRecommendations(
+  jobId: string,
+  projectId: string,
+  supabase: ReturnType<typeof createClient>,
+  GEMINI_API_KEY: string
+): Promise<void> {
+  try {
+    // Load data
     const { data: estimates } = await supabase
       .from("estimates")
       .select("*, activities:activity_id(text, unit_type, quantity, unit)")
@@ -51,10 +105,32 @@ serve(async (req) => {
       .eq("id", projectId)
       .single();
 
-    const hotspotSummary = (estimates || []).map((e: any) => {
+    if (!estimates || estimates.length === 0) {
+      await supabase.from("jobs").update({
+        status: "failed",
+        message: "No estimates found. Run mapping first.",
+        progress: 100,
+        stage: "done",
+      }).eq("id", jobId);
+      return;
+    }
+
+    await supabase.from("jobs").update({
+      progress: 20,
+      stage: "analyzing_hotspots",
+      message: `Analyzing ${estimates.length} emission hotspots…`,
+    }).eq("id", jobId);
+
+    const hotspotSummary = estimates.map((e: any) => {
       const actText = e.activities?.text || "Unknown";
       return `- ${actText}: ${e.co2e_kg?.toLocaleString()} kg CO₂e (${e.matched_factor?.name || "unknown factor"})`;
     }).join("\n");
+
+    await supabase.from("jobs").update({
+      progress: 40,
+      stage: "generating_strategies",
+      message: "Generating reduction strategies with AI…",
+    }).eq("id", jobId);
 
     const prompt = `You are a carbon reduction strategy consultant. Based on the following emission hotspots for a ${project?.company_type || "general"} project in ${project?.primary_region || "unknown region"}, generate 3-5 actionable reduction recommendations.
 
@@ -85,8 +161,20 @@ Return ONLY valid JSON array, no markdown fences.`;
     if (!geminiResp.ok) {
       const errText = await geminiResp.text();
       console.error("Gemini error:", errText);
-      throw new Error("AI recommendation generation failed");
+      await supabase.from("jobs").update({
+        status: "failed",
+        message: "AI recommendation generation failed",
+        progress: 100,
+        stage: "done",
+      }).eq("id", jobId);
+      return;
     }
+
+    await supabase.from("jobs").update({
+      progress: 70,
+      stage: "parsing_results",
+      message: "Parsing AI-generated strategies…",
+    }).eq("id", jobId);
 
     const geminiData = await geminiResp.json();
     let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
@@ -96,9 +184,36 @@ Return ONLY valid JSON array, no markdown fences.`;
     try {
       parsed = JSON.parse(rawText);
     } catch {
-      console.error("Failed to parse Gemini response:", rawText.slice(0, 500));
-      parsed = [];
+      // Try to extract JSON array
+      const match = rawText.match(/\[[\s\S]*\]/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0].replace(/,\s*([}\]])/g, "$1"));
+        } catch {
+          console.error("Failed to parse Gemini response:", rawText.slice(0, 500));
+          parsed = [];
+        }
+      } else {
+        console.error("No JSON array found in Gemini response:", rawText.slice(0, 500));
+        parsed = [];
+      }
     }
+
+    if (parsed.length === 0) {
+      await supabase.from("jobs").update({
+        status: "failed",
+        message: "AI returned no recommendations. Try again.",
+        progress: 100,
+        stage: "done",
+      }).eq("id", jobId);
+      return;
+    }
+
+    await supabase.from("jobs").update({
+      progress: 85,
+      stage: "saving",
+      message: `Saving ${parsed.length} reduction strategies…`,
+    }).eq("id", jobId);
 
     // Delete old recommendations
     await supabase.from("recommendations").delete().eq("project_id", projectId);
@@ -113,26 +228,21 @@ Return ONLY valid JSON array, no markdown fences.`;
       strategy_draft_text: r.strategyDraftText || "",
     }));
 
-    const { data: inserted } = await supabase.from("recommendations").insert(rows).select();
+    await supabase.from("recommendations").insert(rows);
 
-    const result = (inserted || []).map((r: any) => ({
-      id: r.id,
-      projectId: r.project_id,
-      title: r.title,
-      summary: r.summary,
-      expectedDeltaKg: r.expected_delta_kg,
-      constraints: r.constraints,
-      strategyDraftText: r.strategy_draft_text,
-    }));
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    await supabase.from("jobs").update({
+      status: "succeeded",
+      progress: 100,
+      stage: "done",
+      message: `Generated ${parsed.length} reduction strategies`,
+    }).eq("id", jobId);
   } catch (e) {
-    console.error("recommendations error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("runRecommendations error:", e);
+    await supabase.from("jobs").update({
+      status: "failed",
+      progress: 100,
+      stage: "done",
+      message: e instanceof Error ? e.message : "Recommendation generation failed",
+    }).eq("id", jobId).catch(() => {});
   }
-});
+}

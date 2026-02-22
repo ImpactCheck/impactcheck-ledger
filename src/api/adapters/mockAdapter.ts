@@ -355,7 +355,10 @@ export function createMockAdapter(): ImpactcheckClient {
     },
 
     // Recommendations
-    async generateRecommendations() {
+    async startRecommendations() {
+      return { id: "job_rec_1", type: "recommendations", status: "succeeded" as const, progress: 100, stage: "done", message: "Done", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    },
+    async getRecommendations() {
       return [
         {
           id: "rec_1",
@@ -384,6 +387,9 @@ export function createMockAdapter(): ImpactcheckClient {
           strategyDraftText: "Deploy rear-door heat exchangers and upgrade CRAH units. Target PUE 1.10 within 18 months.",
         },
       ];
+    },
+    async generateRecommendations() {
+      return this.getRecommendations();
     },
     async finalizeStrategy(_pid, recIds) {
       return {

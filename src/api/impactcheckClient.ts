@@ -55,6 +55,9 @@ export interface ImpactcheckClient {
   getCompliance(projectId: string): Promise<{ byRegion: Record<string, RegionComplianceResult> }>;
 
   // Recommendations
+  // Recommendations (job-based)
+  startRecommendations(projectId: string): Promise<JobStatus>;
+  getRecommendations(projectId: string): Promise<Recommendation[]>;
   generateRecommendations(projectId: string): Promise<Recommendation[]>;
   finalizeStrategy(
     projectId: string,

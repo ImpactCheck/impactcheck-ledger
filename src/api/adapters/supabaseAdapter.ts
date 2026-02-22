@@ -348,9 +348,32 @@ export function createSupabaseAdapter(): ImpactcheckClient {
       };
     },
 
-    // ─── Recommendations ───────────────────────────────────
-    async generateRecommendations(projectId) {
+    // ─── Recommendations (job-based) ──────────────────────
+    async startRecommendations(projectId) {
       return invokeFunction("recommendations", { projectId });
+    },
+
+    async getRecommendations(projectId) {
+      const { data, error } = await supabase
+        .from("recommendations")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("expected_delta_kg", { ascending: true });
+      if (error) throw error;
+      return (data || []).map((r: any) => ({
+        id: r.id,
+        projectId: r.project_id,
+        title: r.title,
+        summary: r.summary,
+        expectedDeltaKg: r.expected_delta_kg,
+        constraints: r.constraints,
+        strategyDraftText: r.strategy_draft_text,
+      }));
+    },
+
+    async generateRecommendations(projectId) {
+      // Legacy: just load from DB (generation is now job-based via startRecommendations)
+      return this.getRecommendations(projectId);
     },
 
     async finalizeStrategy(projectId, recommendationIds) {

@@ -56,8 +56,8 @@ export default function Report() {
             setReport(prev => prev ? { ...prev, compliance: { ...prev.compliance, byRegion: c.byRegion } } : prev);
           })
           .catch(() => {});
-        // Load recommendations in background
-        api.generateRecommendations(projectId).then(setRecommendations).catch(() => setRecommendations([]));
+        // Load saved recommendations from DB (no generation)
+        api.getRecommendations(projectId).then(setRecommendations).catch(() => setRecommendations([]));
       })
       .catch((e) => {
         setError(e.message ?? "Failed to load report");
