@@ -51,11 +51,11 @@ export function CategoryBreakdownSection({ categories, primaryRegion, hero }: Pr
         <div className="flex items-center gap-4 mt-3 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: EMBODIED_COLOR }} />
-            Embodied
+            Embodied (Year 1 only)
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: OPERATIONAL_COLOR }} />
-            Operational
+            Operational (annual)
           </div>
         </div>
       </CardContent>

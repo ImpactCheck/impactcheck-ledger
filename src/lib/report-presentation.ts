@@ -144,7 +144,7 @@ export function getReportLayout(
 
 export const SECTION_LABELS: Record<ReportSectionId, string> = {
   "executive-summary": "Executive Summary",
-  "phase-split": "Embodied vs Operational Split",
+  "phase-split": "Embodied vs Operational Split (Year 1 + annual)",
   "region-map": "Emissions by Region",
   hotspots: "Top Hotspots",
   scenarios: "Reduction Scenarios",

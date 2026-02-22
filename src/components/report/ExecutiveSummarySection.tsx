@@ -50,7 +50,7 @@ export function ExecutiveSummarySection({ report, primaryRegion, hero }: Props) 
                 <p className="text-2xl font-bold font-mono">
                   {formatTonnes(phaseTotals.embodied)} <span className="text-sm font-normal text-muted-foreground">t CO₂e</span>
                 </p>
-                <p className="text-[11px] text-muted-foreground">One-time · construction & hardware</p>
+                <p className="text-[11px] text-muted-foreground">Year 1 only · construction & hardware (no embodied in later years)</p>
               </div>
             </div>
           </CardContent>
@@ -66,7 +66,7 @@ export function ExecutiveSummarySection({ report, primaryRegion, hero }: Props) 
                 <p className="text-2xl font-bold font-mono">
                   {formatTonnes(phaseTotals.operational)} <span className="text-sm font-normal text-muted-foreground">t CO₂e</span>
                 </p>
-                <p className="text-[11px] text-muted-foreground">Per year · energy & operations</p>
+                <p className="text-[11px] text-muted-foreground">Per year · energy & operations (recurring every year)</p>
               </div>
             </div>
           </CardContent>

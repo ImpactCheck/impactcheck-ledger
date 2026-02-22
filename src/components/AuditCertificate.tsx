@@ -114,7 +114,7 @@ function generateCertificateHTML(report: Report, projectName: string, primaryReg
     <tbody>
       <tr><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;">Standard</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;">GHG Protocol Corporate Standard (Scope 1, 2, 3)</td></tr>
       <tr><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;">Emission Factors</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;">Climatiq API (IPCC AR6, EPA eGRID, IEA)</td></tr>
-      <tr><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;">Boundaries</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;">Operational control approach; embodied + operational lifecycle</td></tr>
+      <tr><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;">Boundaries</td><td style="padding:6px 12px;border-bottom:1px solid #e5e7eb;">Operational control approach; embodied (Year 1 only) + operational (annual) lifecycle</td></tr>
       <tr><td style="padding:6px 12px;font-weight:600;">Reporting Period</td><td style="padding:6px 12px;">Calendar year of project configuration</td></tr>
     </tbody>
   </table>

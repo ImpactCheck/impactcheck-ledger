@@ -258,8 +258,8 @@ export default function Activities() {
                 <Tabs value={activePhaseTab} onValueChange={(v) => setActivePhaseTab(v as "all" | "embodied" | "operational")}>
                   <TabsList className="rounded-xl">
                     <TabsTrigger value="all" className="rounded-lg">All ({activities.length})</TabsTrigger>
-                    <TabsTrigger value="embodied" className="rounded-lg">Embodied ({phaseCounts.embodied})</TabsTrigger>
-                    <TabsTrigger value="operational" className="rounded-lg">Operational ({phaseCounts.operational})</TabsTrigger>
+                    <TabsTrigger value="embodied" className="rounded-lg">Embodied / Year 1 ({phaseCounts.embodied})</TabsTrigger>
+                    <TabsTrigger value="operational" className="rounded-lg">Operational / annual ({phaseCounts.operational})</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </div>
@@ -316,14 +316,14 @@ export default function Activities() {
                   <div className="mt-4 space-y-3">
                     <div>
                       <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Embodied</span>
+                        <span className="text-muted-foreground">Embodied (Year 1)</span>
                         <span className="font-mono">{embodiedPct}%</span>
                       </div>
                       <Progress value={embodiedPct} className="h-1.5" />
                     </div>
                     <div>
                       <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Operational</span>
+                        <span className="text-muted-foreground">Operational (annual)</span>
                         <span className="font-mono">{operationalPct}%</span>
                       </div>
                       <Progress value={operationalPct} className="h-1.5" />

@@ -41,7 +41,7 @@ export function DataQualitySection({ report, hero }: Props) {
             <span className="font-mono font-bold">{phaseClassification}%</span>
           </div>
           <Progress value={phaseClassification} className="h-2" />
-          <p className="text-[11px] text-muted-foreground mt-1">{hotspotsWithPhase} of {report.hotspots.length} activities classified as embodied/operational</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{hotspotsWithPhase} of {report.hotspots.length} activities classified as embodied (Year 1) or operational (annual)</p>
         </div>
         <div>
           <div className="flex items-center justify-between text-sm mb-1.5">

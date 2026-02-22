@@ -44,7 +44,7 @@ export function HeroMetrics({ totalCarbon, embodiedTotal, operationalAnnual, sci
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard label="SCI Score" value={sciScore.toFixed(3)} unit="gCO₂e/token" icon={Activity} accent />
-        <MetricCard label="Embodied Debt" value={formatTonnes(embodiedTotal)} unit="tonnes" icon={Factory} />
+        <MetricCard label="Embodied (Year 1)" value={formatTonnes(embodiedTotal)} unit="tonnes" icon={Factory} />
         <MetricCard label="Annual Ops" value={formatTonnes(operationalAnnual)} unit="tonnes/yr" icon={Zap} />
         <MetricCard label="Intensity" value={formatNumber(totalCarbon > 0 ? operationalAnnual / totalCarbon * 100 : 0)} unit="% ops" icon={BarChart3} />
       </div>

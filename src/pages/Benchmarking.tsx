@@ -227,7 +227,7 @@ export default function Benchmarking() {
               icon={<TrendingDown className="h-3.5 w-3.5" />}
               title="Embodied Carbon"
               value={estimates.length > 0 ? `${embodiedPct}%` : "—"}
-              sub="vs 38% industry baseline"
+              sub="Year 1 only · vs 38% industry baseline"
               color="text-amber-500"
               bgColor="bg-amber-500/10"
             />

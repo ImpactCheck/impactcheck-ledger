@@ -9,8 +9,9 @@ interface Props {
 export function AssumptionsSection({ hero }: Props) {
   const assumptions = [
     "Scope 1, 2, and partial Scope 3 emissions are included per GHG Protocol Corporate Standard.",
-    "Embodied carbon covers hardware procurement, construction materials, and infrastructure deployment (one-time).",
-    "Operational carbon covers energy consumption, cooling, and ongoing maintenance (annualized).",
+    "Embodied carbon covers hardware procurement, construction materials, and infrastructure deployment. It is incurred once in Year 1 only, alongside operational costs.",
+    "Operational carbon covers energy consumption, cooling, and ongoing maintenance. It recurs every year.",
+    "In subsequent years (Year 2 onward), only operational carbon applies; no embodied costs are attributed per year.",
     "Emission factors are matched to the closest available region; global averages are used as fallback.",
     "Financial data (spend-based estimates) uses Climatiq monetary emission factors when physical quantities are unavailable.",
     "System boundary includes cradle-to-gate for embodied emissions; gate-to-grave is excluded unless explicitly modeled.",

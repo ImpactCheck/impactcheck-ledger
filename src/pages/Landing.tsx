@@ -67,7 +67,7 @@ const DIFFERENTIATORS = [
 
 const STEPS = [
   { num: "01", title: "Upload documents", description: "Drop your procurement data — PDF, CSV, XLSX, or JSON." },
-  { num: "02", title: "AI extraction", description: "Our AI reads every line item and classifies embodied vs. operational activities." },
+  { num: "02", title: "AI extraction", description: "Our AI reads every line item and classifies embodied (Year 1 only) vs. operational (recurring annual) activities." },
   { num: "03", title: "Emission mapping", description: "Each activity is matched to verified emission factors from global databases." },
   { num: "04", title: "Full report", description: "Download a lifecycle carbon report with regional comparisons and reduction recommendations." },
 ];
