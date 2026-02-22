@@ -13,9 +13,8 @@ serve(async (req) => {
     const { projectId, action, recommendationIds } = await req.json();
     if (!projectId) throw new Error("projectId required");
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
-
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -70,26 +69,41 @@ For each recommendation return a JSON array with:
 
 Return ONLY valid JSON array, no markdown fences.`;
 
-    const geminiResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`,
-      {
+    // Use Lovable AI Gateway with retry
+    const callAI = async (attempt = 0): Promise<string> => {
+      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 4096 },
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            { role: "system", content: "You are a carbon reduction strategy consultant. Return ONLY valid JSON arrays, no markdown fences." },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.5,
+          max_tokens: 4096,
         }),
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error(`AI gateway error (attempt ${attempt}):`, resp.status, errText);
+        if ((resp.status === 503 || resp.status === 429) && attempt < 2) {
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          return callAI(attempt + 1);
+        }
+        throw new Error("AI recommendation generation failed");
       }
-    );
 
-    if (!geminiResp.ok) {
-      const errText = await geminiResp.text();
-      console.error("Gemini error:", errText);
-      throw new Error("AI recommendation generation failed");
-    }
+      const data = await resp.json();
+      return data.choices?.[0]?.message?.content ?? "[]";
+    };
 
-    const geminiData = await geminiResp.json();
-    let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+    let rawText = await callAI();
+
     rawText = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
 
     let parsed: any[];
