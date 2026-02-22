@@ -1,38 +1,99 @@
-## Remove Deployment / Crusoe Feature
 
-This plan removes the entire Deploy / Crusoe integration from the application, including the UI page, API methods, edge function, sidebar step, and setup checkbox.
 
-### Changes
+## Distinguish Embodied vs Operational Activities
 
-**1. Delete files**
+Activities extracted from documents fall into two fundamentally different categories: **embodied** (one-time, like building materials) and **operational** (recurring, like annual electricity). This plan adds that distinction to the data model, the Activities page UI, and the Report page.
 
-- `src/pages/Deploy.tsx` -- the deploy page
-- `supabase/functions/deploy-crusoe/index.ts` -- the edge function
+### What Changes
 
-**2. `src/App.tsx**` -- Remove the Deploy route and import
+**1. Add `category` to the frontend data model**
 
-**3. `src/layouts/DashboardLayout.tsx**` -- Remove the Deploy step from the sidebar `STEPS` array and the `deployOnly` filtering logic
+The `activities` table already stores a `category` column (populated by the AI extraction with values like `HARDWARE`, `CONSTRUCTION`, `ENERGY`, `OPERATIONS`, etc.), but the frontend `ExtractedActivity` interface does not include it. We will add it.
 
-**4. `src/contexts/ProjectContext.tsx**` -- Remove `deployOptIn` from `ProjectConfig` interface and default state
+In `src/contracts/impactcheck.v2.ts`, add `category?: string` to `ExtractedActivity`.
 
-**5. `src/pages/Setup.tsx**` -- Remove the "Help with implementation" checkbox section and the `Checkbox` import
+**2. Define the Embodied/Operational classification**
 
-**6. `src/pages/Recommendations.tsx**` -- Remove the conditional "Continue to Deploy" button and related `deployOptIn` logic
+Create a simple helper that maps the raw category values to a lifecycle phase:
 
-**7. `src/hooks/useStepCompletion.ts**` -- Remove `deploy` from the `StepCompletion` interface and initial/computed state
+- **Embodied** (one-time): `HARDWARE`, `CONSTRUCTION`, `PROCUREMENT`
+- **Operational** (recurring per year): `ENERGY`, `OPERATIONS`, `WATER`, `TRANSPORT`, `WASTE`, `OTHER`
 
-**8. `src/api/impactcheckClient.ts**` -- Remove `deployCrusoe` and `getDeploymentStatus` from the API interface; remove `DeploymentPlan` import
+This will be a small utility, either in the contracts file or a shared lib.
 
-**9. `src/api/adapters/supabaseAdapter.ts**` -- Remove the deploy methods and `DeploymentPlan` import
+**3. Update the Activities page to display the type**
 
-**10. `src/api/adapters/mockAdapter.ts**` -- Remove the deploy methods and `DeploymentPlan` import
+The Activities page will:
+- Show a colored badge on each activity row indicating "Embodied" or "Operational"
+- Group activities by lifecycle phase using tabs or section headers: an "Embodied (One-time)" section and an "Operational (Annual)" section, nested within the existing region tabs if multi-region
+- Display counts for each section (e.g., "12 embodied, 18 operational")
 
-**11. `src/contracts/impactcheck.v2.ts**` -- Remove the `DeploymentPlan` interface
+**4. Update the Supabase adapter to include `category`**
 
-**12. Delete deployed edge function** -- Remove `deploy-crusoe` from the deployed backend functions
+In `src/api/adapters/supabaseAdapter.ts`, ensure `category` is selected and mapped when fetching activities, and included when upserting them.
+
+**5. Update the Report page to separate embodied vs operational totals**
+
+The Report page will show:
+- The hero card still displays the **total lifecycle** figure
+- Below it, two summary cards side by side:
+  - **Embodied Carbon** -- total one-time emissions from construction/hardware
+  - **Operational Carbon** -- total annual recurring emissions from energy/operations
+- The category breakdown chart will color-code bars by lifecycle phase
+- Hotspots will show a small "Embodied" or "Operational" label next to each item
+
+**6. Update the Report data contract**
+
+Add optional `embodiedTotalByRegion` and `operationalTotalByRegion` fields to the `Report` interface so the backend (or frontend aggregation) can provide the split. Alternatively, compute this client-side from `categoryBreakdownByRegion` using the classification helper -- this is simpler and avoids backend changes.
+
+The plan favors **client-side derivation**: the existing `categoryBreakdownByRegion` data already has category names, so the frontend simply sums categories into embodied vs operational buckets. No backend/edge function changes needed.
 
 ### Technical Details
 
-- The `Rocket` icon import in `DashboardLayout.tsx` will also be removed since no step uses it
-- The `Dashboard.tsx` "Deploy-ready" label on the AI infra card can be changed to just show the count without that label
-- Also remove any Python related deploy files that are part of the implementation logic for the deployment aspect
+**Files to modify:**
+
+| File | Change |
+|------|--------|
+| `src/contracts/impactcheck.v2.ts` | Add `category?: string` to `ExtractedActivity`. Add `ActivityPhase` type and `getActivityPhase()` helper. |
+| `src/api/adapters/supabaseAdapter.ts` | Include `category` in activity select/insert queries. |
+| `src/api/adapters/mockAdapter.ts` | Add `category` to mock activity data. |
+| `src/pages/Activities.tsx` | Add phase grouping (two sections or sub-tabs) and phase badges on each row. |
+| `src/pages/Report.tsx` | Add embodied/operational summary cards derived from `categoryBreakdownByRegion`. Tag hotspot items with phase labels. |
+
+**Phase classification logic (new helper in contracts file):**
+
+```text
+function getActivityPhase(category: string | undefined): "embodied" | "operational"
+  EMBODIED_CATEGORIES = ["HARDWARE", "CONSTRUCTION", "PROCUREMENT"]
+  if category uppercased is in EMBODIED_CATEGORIES -> "embodied"
+  else -> "operational"
+```
+
+**Activities page layout:**
+
+```text
++------------------------------------------+
+| Step 3 - Activities                      |
+| AI Extraction card (unchanged)           |
++------------------------------------------+
+| [Embodied (One-time)] [Operational (Annual)] |  <-- new phase tabs
+|                                          |
+| Section: 12 activities                   |
+| +--------------------------------------+ |
+| | Activity row  [Embodied] badge       | |
+| | Activity row  [Embodied] badge       | |
+| +--------------------------------------+ |
++------------------------------------------+
+```
+
+**Report page layout addition:**
+
+```text
++-------------------+--------------------+
+| Embodied Carbon   | Operational Carbon |
+| 1,234 t CO2e      | 5,678 t CO2e       |
+| (one-time)        | (per year)         |
++-------------------+--------------------+
+```
+
+No database migrations are needed since the `category` column already exists. No edge function changes are needed since the extraction prompt already populates the category field.
