@@ -224,8 +224,37 @@ export default function Report() {
         <p className="text-sm">{project.projectName} · {project.year} · {primaryRegion.replace(/_/g, " ")} · {USE_CASE_LABELS[useCase]} view</p>
       </div>
 
-      {/* Dynamic sections */}
-      {layout.sections.map(renderSection)}
+      {/* Dynamic sections — render phase-split + region-map side by side */}
+      {(() => {
+        const sections = layout.sections;
+        const rendered: React.ReactNode[] = [];
+        const paired = new Set<string>();
+
+        for (let i = 0; i < sections.length; i++) {
+          const s = sections[i];
+          if (paired.has(s.id)) continue;
+
+          // Check if phase-split and region-map are adjacent (either order)
+          const next = sections[i + 1];
+          const isPairA = s.id === "phase-split" && next?.id === "region-map";
+          const isPairB = s.id === "region-map" && next?.id === "phase-split";
+
+          if (isPairA || isPairB) {
+            paired.add(s.id);
+            paired.add(next.id);
+            rendered.push(
+              <div key="phase-region-row" className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>{renderSection(s)}</div>
+                <div>{renderSection(next)}</div>
+              </div>
+            );
+            i++; // skip next
+          } else {
+            rendered.push(renderSection(s));
+          }
+        }
+        return rendered;
+      })()}
 
       {/* Navigation */}
       <div className="flex justify-between print:hidden">
