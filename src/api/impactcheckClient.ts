@@ -6,7 +6,6 @@ import type {
   ActivityEstimate,
   Report,
   Recommendation,
-  DeploymentPlan,
 } from "@/contracts/impactcheck.v2";
 
 export interface ImpactcheckClient {
@@ -53,7 +52,4 @@ export interface ImpactcheckClient {
     recommendationIds: string[]
   ): Promise<{ strategyText: string }>;
 
-  // Deploy
-  deployCrusoe(projectId: string): Promise<DeploymentPlan>;
-  getDeploymentStatus(projectId: string): Promise<DeploymentPlan>;
 }

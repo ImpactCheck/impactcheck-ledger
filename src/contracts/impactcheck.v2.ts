@@ -103,12 +103,6 @@ export interface Recommendation {
   strategyDraftText: string;
 }
 
-export interface DeploymentPlan {
-  projectId: string;
-  status: "not_started" | "running" | "succeeded" | "failed";
-  logs: string[];
-}
-
 // ─── Utility Helpers ──────────────────────────────────────────────────
 
 export function formatTonnes(kg: number): string {

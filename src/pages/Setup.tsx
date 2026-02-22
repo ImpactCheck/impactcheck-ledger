@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowRight, Loader2 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
 import type { UseCase } from "@/contexts/ProjectContext";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
@@ -152,22 +151,6 @@ export default function Setup() {
 
           </div>
 
-          <div className="flex items-start gap-3 rounded-xl bg-muted/50 p-4">
-            <Checkbox
-              id="deployOptIn"
-              checked={project.deployOptIn}
-              onCheckedChange={(checked) => updateProject({ deployOptIn: !!checked })}
-              className="mt-0.5"
-            />
-            <div className="space-y-1">
-              <Label htmlFor="deployOptIn" className="cursor-pointer font-medium">
-                Help with implementation
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Do you want help with the implementation of a proposed improved carbon-efficient pipeline? Enabling this adds a Deploy step to the workflow.
-              </p>
-            </div>
-          </div>
         </CardContent>
       </Card>
 

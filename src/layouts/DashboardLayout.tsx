@@ -2,7 +2,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useProject } from "@/contexts/ProjectContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
-  Settings, Upload, Activity, GitMerge, FileText, Lightbulb, Rocket,
+  Settings, Upload, Activity, GitMerge, FileText, Lightbulb,
   Check, Sun, Moon, LayoutDashboard,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
@@ -23,7 +23,6 @@ interface Step {
   path: string;
   label: string;
   icon: React.ElementType;
-  deployOnly?: boolean;
   completionKey: keyof StepCompletion;
 }
 
@@ -34,7 +33,6 @@ const STEPS: Step[] = [
   { path: "/mapping", label: "Mapping", icon: GitMerge, completionKey: "mapping" },
   { path: "/report", label: "Report", icon: FileText, completionKey: "report" },
   { path: "/recommendations", label: "Suggest", icon: Lightbulb, completionKey: "recommendations" },
-  { path: "/deploy", label: "Deploy", icon: Rocket, deployOnly: true, completionKey: "deploy" },
 ];
 
 export default function DashboardLayout() {
@@ -44,7 +42,7 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const completion = useStepCompletion();
 
-  const visibleSteps = STEPS.filter((s) => !s.deployOnly || project.deployOptIn);
+  const visibleSteps = STEPS;
 
   const currentStepIndex = visibleSteps.findIndex((s) => s.path === location.pathname);
   const completedCount = visibleSteps.filter((s) => completion[s.completionKey]).length;

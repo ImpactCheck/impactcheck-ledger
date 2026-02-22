@@ -11,7 +11,6 @@ export interface ProjectConfig {
   comparisonRegions: string[];
   baselineFootprintKgCO2e?: number;
   currentProjectId: string | null;
-  deployOptIn: boolean;
 }
 
 const DEFAULT_PROJECT: ProjectConfig = {
@@ -23,7 +22,6 @@ const DEFAULT_PROJECT: ProjectConfig = {
   comparisonRegions: [],
   baselineFootprintKgCO2e: undefined,
   currentProjectId: localStorage.getItem("currentProjectId"),
-  deployOptIn: false,
 };
 
 interface ProjectContextValue {

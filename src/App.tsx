@@ -13,7 +13,6 @@ import Activities from "@/pages/Activities";
 import Mapping from "@/pages/Mapping";
 import Report from "@/pages/Report";
 import Recommendations from "@/pages/Recommendations";
-import Deploy from "@/pages/Deploy";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,7 +34,6 @@ const App = () => (
               <Route path="/mapping" element={<Mapping />} />
               <Route path="/report" element={<Report />} />
               <Route path="/recommendations" element={<Recommendations />} />
-              <Route path="/deploy" element={<Deploy />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
