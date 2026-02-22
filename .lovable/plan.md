@@ -1,83 +1,42 @@
 
 
-## Regional Simulation for Comparison Reports
+## Benchmarking: Direct Estimates Comparison (No Report)
 
 ### Problem
-Currently, the mapping edge function processes all regions (primary + comparison) during the mapping step. The user wants comparison-region estimates to be generated as **simulations** at report time, keeping the reviewed home-region data untouched.
+The Benchmarking page currently calls `api.getReport()`, which triggers slow compliance calls and builds a full report object. Benchmarking only needs to compare raw estimate totals across regions -- home region estimates vs simulation estimates for comparison regions.
 
-### Architecture
+### Revised Approach
 
-The plan introduces a **simulation layer** that runs at report time:
+Remove the `getReport` call entirely. Instead:
 
-1. **New `simulation_estimates` table** -- stores comparison-region estimate results separately from reviewed home-region data in the `estimates` table.
+1. Load home-region estimates from `estimates` table directly (already done via `api.getEstimates`).
+2. If comparison regions exist, trigger the simulation job and show progress via `JobProgressCard`.
+3. Once simulation completes, load simulation estimates via `api.getSimulationEstimates`.
+4. Aggregate totals per region from both datasets and display the benchmarking charts.
 
-2. **New `simulate-regions` edge function** -- takes the project's reviewed activities and re-runs the Climatiq mapping pipeline for each comparison region. Stores results in `simulation_estimates`. Returns a job ID for progress tracking.
+### Changes
 
-3. **Modified `mapping` edge function** -- only processes the **primary region** (no longer iterates over comparison regions).
+#### `src/pages/Benchmarking.tsx`
 
-4. **Updated Report page** -- on load, checks if simulations are needed (comparison regions exist). If so, triggers the simulation job and shows a progress card. Once complete, fetches the report which now merges both datasets.
+- Remove the `getReport` call and the `report` state entirely.
+- Add `useJobPoller` with `jobType: "simulation"` for progress tracking.
+- On mount:
+  - Load home-region estimates via `api.getEstimates(projectId)`.
+  - Check if comparison regions exist (from `project.comparisonRegions`).
+  - If yes: check for existing simulation estimates; if empty, trigger `api.startSimulation(projectId)` and show `JobProgressCard`.
+  - Once simulation completes, load simulation estimates via `api.getSimulationEstimates(projectId)`.
+- Compute all benchmarking metrics (totals per region, intensity, phase splits) directly from the raw estimate arrays instead of relying on a report object.
+- Add a new **Region Comparison bar chart** showing total CO2e per region side by side (home vs each comparison region).
+- Keep the existing carbon intensity benchmark chart and trajectory chart, but derive data from estimates + activities instead of the report.
 
-5. **Updated `getReport`** -- reads from both `estimates` (home region) and `simulation_estimates` (comparison regions) to build the multi-region report.
-
-### Technical Details
-
-#### 1. Database: `simulation_estimates` table
-
-New table with the same schema as `estimates` plus a `simulation_region` column:
-
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid (PK) | auto-generated |
-| project_id | uuid | FK-like reference |
-| activity_id | uuid | references activities |
-| simulation_region | text | the comparison region being simulated |
-| region | text | Climatiq region used |
-| matched_factor | jsonb | same as estimates |
-| confidence | numeric | same as estimates |
-| co2e_kg | numeric | same as estimates |
-| input_used | jsonb | same as estimates |
-| created_at | timestamptz | default now() |
-
-RLS: same open policy as `estimates` (matching current pattern).
-
-#### 2. New Edge Function: `simulate-regions`
-
-- Accepts `{ projectId }`.
-- Creates a job of type `"simulation"`.
-- Reads activities from `activities` table (the reviewed home-region data).
-- Reads project's `comparison_regions`.
-- For each comparison region, runs the same Climatiq search-then-estimate pipeline (reusing the mapping function's logic).
-- Deletes old `simulation_estimates` for the project before inserting new ones.
-- Updates job progress as it processes each region.
-- The function structure mirrors the existing `mapping/index.ts` but only targets comparison regions and writes to `simulation_estimates`.
-
-#### 3. Modify `mapping/index.ts`
-
-Change lines 80-82 to only use `[primaryRegion]` instead of all project regions. This ensures mapping only produces estimates for the home region that the user has reviewed.
-
-```
-// Before:
-const projectRegions = [proj?.primary_region, ...(proj?.comparison_regions || [])].filter(Boolean);
-const regionsToEstimate = projectRegions.length > 0 ? projectRegions : ["us"];
-
-// After:
-const regionsToEstimate = [proj?.primary_region || "us"];
-```
-
-#### 4. Add `startSimulation` to API client
-
-New method on `ImpactcheckClient`:
-```typescript
-startSimulation(projectId: string): Promise<JobStatus>;
-getSimulationEstimates(projectId: string): Promise<ActivityEstimate[]>;
-```
-
-The `supabaseAdapter` implements these by invoking the new edge function and reading from `simulation_estimates`.
-
-#### 5. Updated Report Page Flow
+#### Data Flow
 
 ```text
-User navigates to /report
+User navigates to /benchmarking
+        |
+        v
+  Load home estimates (api.getEstimates)
+  Load activities (for phase categorization)
         |
         v
   Has comparison regions?
@@ -85,37 +44,31 @@ User navigates to /report
   No             Yes
   |               |
   v               v
-Load report    Check for active simulation job
-immediately      |
-              Running? --> Show JobProgressCard
-              Not found? --> Start simulation job --> Show JobProgressCard
-              Succeeded? --> Load report with merged data
+Show charts    Check for simulation data
+with home        |
+data only    Has data? -----> Load simulation estimates --> Show charts
+              |
+              No data --> Start simulation --> Show JobProgressCard
+                                                    |
+                                              Completed --> Load simulation estimates --> Show charts
 ```
 
-The Report page will:
-- Use `useJobPoller` with `jobType: "simulation"` to track progress.
-- Show a `JobProgressCard` component (already exists) while simulations run.
-- Once simulation completes, fetch the full report.
+#### Metrics Derived from Raw Estimates
 
-#### 6. Updated `getReport` in `supabaseAdapter`
+- **Total CO2e per region**: Sum `co2e_kg` grouped by region from estimates + simulation_estimates.
+- **Phase totals** (embodied vs operational): Categorize by looking up each estimate's activity category (same `getActivityPhase` logic).
+- **Carbon intensity**: Total CO2e / activity count per region.
+- **Region comparison chart**: New horizontal bar chart with one bar per region (home + comparison regions).
 
-After fetching `estimates` (home region), also fetch `simulation_estimates` and merge them into the same aggregation logic for `totalsByRegion`, `categoryBreakdownByRegion`, `phaseTotalsByRegion`, and `hotspots`.
+#### New Chart: Region Comparison
 
-#### 7. Fix Build Errors
-
-While implementing, also fix the two existing build errors:
-- Add `deleteDocument` to `mockAdapter.ts`
-- Fix the `"processed"` status comparison in `Upload.tsx` to use `"ready"`
-
-### Files to Create
-- `supabase/functions/simulate-regions/index.ts`
+A new bar chart comparing total emissions across all regions. Each bar represents a region, colored distinctly. The home region is highlighted. This replaces the need for report-level `totalsByRegion`.
 
 ### Files to Modify
-- `supabase/functions/mapping/index.ts` (restrict to primary region only)
-- `supabase/config.toml` (add simulate-regions function config)
-- `src/api/impactcheckClient.ts` (add simulation methods)
-- `src/api/adapters/supabaseAdapter.ts` (implement simulation methods + merge into getReport)
-- `src/api/adapters/mockAdapter.ts` (add missing methods + fix build error)
-- `src/pages/Report.tsx` (add simulation trigger + progress UI)
-- `src/pages/Upload.tsx` (fix build error)
+
+- `src/pages/Benchmarking.tsx` -- Full rework: remove `getReport`, add simulation trigger + progress, compute metrics from raw estimates, add region comparison chart.
+
+### No Other Files Changed
+
+The API client already has `getEstimates`, `getSimulationEstimates`, and `startSimulation`. The `JobProgressCard` component already supports the "simulation" job type. No backend changes needed.
 
