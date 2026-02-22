@@ -52,6 +52,18 @@ export interface ExtractedActivity {
   currency?: string;
   sourceDocumentId?: string;
   note?: string;
+  category?: string;
+}
+
+// ─── Activity Phase Classification ───────────────────────────────────
+
+export type ActivityPhase = "embodied" | "operational";
+
+const EMBODIED_CATEGORIES = ["HARDWARE", "CONSTRUCTION", "PROCUREMENT"];
+
+export function getActivityPhase(category: string | undefined): ActivityPhase {
+  if (!category) return "operational";
+  return EMBODIED_CATEGORIES.includes(category.toUpperCase()) ? "embodied" : "operational";
 }
 
 export interface ActivityEstimate {
@@ -90,7 +102,7 @@ export interface Report {
     us: { status: "green" | "yellow" | "red"; reasons: string[] };
     eu: { status: "green" | "yellow" | "red"; reasons: string[] };
   };
-  hotspots: { text: string; co2eKg: number }[];
+  hotspots: { text: string; co2eKg: number; phase?: ActivityPhase }[];
 }
 
 export interface Recommendation {

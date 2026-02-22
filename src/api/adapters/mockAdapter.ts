@@ -8,6 +8,7 @@ import type {
   Report,
   Recommendation,
 } from "@/contracts/impactcheck.v2";
+import { getActivityPhase } from "@/contracts/impactcheck.v2";
 
 // ─── Deterministic hash ───────────────────────────────────────────────
 function simpleHash(str: string): number {
@@ -146,6 +147,7 @@ export function createMockAdapter(): ImpactcheckClient {
       quantity: t.quantity,
       unit: t.unit,
       sourceDocumentId: `doc_${(i % 3) + 1}`,
+      category: t.category,
     })
   );
 
@@ -204,7 +206,7 @@ export function createMockAdapter(): ImpactcheckClient {
     const sorted = [...allEstimates].sort((a, b) => b.co2eKg - a.co2eKg);
     const hotspots = sorted.slice(0, 5).map((e) => {
       const act = storedActivities.find((a) => a.id === e.activityId);
-      return { text: act?.text ?? e.activityId, co2eKg: e.co2eKg };
+      return { text: act?.text ?? e.activityId, co2eKg: e.co2eKg, phase: getActivityPhase(act?.category) as "embodied" | "operational" };
     });
 
     return {

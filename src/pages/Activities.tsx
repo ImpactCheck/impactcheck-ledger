@@ -2,10 +2,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Save, Download, Check, X, Loader2, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
 import type { ExtractedActivity, UnitType } from "@/contracts/impactcheck.v2";
+import { getActivityPhase } from "@/contracts/impactcheck.v2";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -47,6 +48,7 @@ export default function Activities() {
   const [saving, setSaving] = useState(false);
   const [csvPreview, setCsvPreview] = useState<string | null>(null);
   const [activeRegionTab, setActiveRegionTab] = useState(allRegions[0] ?? "all");
+  const [activePhaseTab, setActivePhaseTab] = useState<"all" | "embodied" | "operational">("all");
 
   const autoStartedRef = useRef(false);
 
@@ -121,9 +123,23 @@ export default function Activities() {
     URL.revokeObjectURL(url);
   };
 
-  const filtered = isMultiRegion && activeRegionTab !== "all"
-    ? activities.filter((a) => a.region === activeRegionTab)
-    : activities;
+  // Phase counts
+  const phaseCounts = useMemo(() => {
+    const embodied = activities.filter((a) => getActivityPhase(a.category) === "embodied").length;
+    return { embodied, operational: activities.length - embodied };
+  }, [activities]);
+
+  // Filter by region then phase
+  const filtered = useMemo(() => {
+    let result = activities;
+    if (isMultiRegion && activeRegionTab !== "all") {
+      result = result.filter((a) => a.region === activeRegionTab);
+    }
+    if (activePhaseTab !== "all") {
+      result = result.filter((a) => getActivityPhase(a.category) === activePhaseTab);
+    }
+    return result;
+  }, [activities, isMultiRegion, activeRegionTab, activePhaseTab]);
 
   const topCount = isMultiRegion ? 50 : 100;
   const displayActivities = filtered.slice(0, topCount);
@@ -223,13 +239,28 @@ export default function Activities() {
       {/* Activity list */}
       {hasActivities && (
         <>
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="text-xs rounded-full">
-              {isMultiRegion ? `Top ${topCount} per region` : `Top ${topCount} selected`}
-            </Badge>
-            <span className="text-xs text-muted-foreground">
-              {activities.length} total · showing {displayActivities.length}
-            </span>
+          {/* Phase summary + tabs */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs text-muted-foreground">
+                {activities.length} total · {phaseCounts.embodied} embodied · {phaseCounts.operational} operational
+              </span>
+              <Badge variant="outline" className="text-xs rounded-full">
+                {isMultiRegion ? `Top ${topCount} per region` : `Top ${topCount} selected`}
+              </Badge>
+            </div>
+
+            <Tabs value={activePhaseTab} onValueChange={(v) => setActivePhaseTab(v as "all" | "embodied" | "operational")}>
+              <TabsList className="rounded-xl">
+                <TabsTrigger value="all" className="rounded-lg">All</TabsTrigger>
+                <TabsTrigger value="embodied" className="rounded-lg gap-1.5">
+                  Embodied <span className="text-[10px] opacity-60">(One-time)</span>
+                </TabsTrigger>
+                <TabsTrigger value="operational" className="rounded-lg gap-1.5">
+                  Operational <span className="text-[10px] opacity-60">(Annual)</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
 
           {isMultiRegion ? (
@@ -295,6 +326,19 @@ const REGION_LABELS_MAP: Record<string, string> = {
   singapore: "Singapore",
 };
 
+function PhaseBadge({ category }: { category?: string }) {
+  const phase = getActivityPhase(category);
+  return phase === "embodied" ? (
+    <Badge className="text-[10px] rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100">
+      Embodied
+    </Badge>
+  ) : (
+    <Badge className="text-[10px] rounded-full bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 border-sky-200 dark:border-sky-800 hover:bg-sky-100">
+      Operational
+    </Badge>
+  );
+}
+
 function ActivityTable({
   activities,
   allRegions,
@@ -316,12 +360,15 @@ function ActivityTable({
             <Collapsible key={act.id}>
               <div className="rounded-xl bg-muted/40 hover:bg-muted/60 transition-colors border border-transparent hover:border-border/50">
                 <div className="p-3 space-y-2">
-                  <Textarea
-                    value={act.text}
-                    onChange={(e) => onUpdate(act.id, "text", e.target.value)}
-                    className="min-h-[2.5rem] text-sm resize-none bg-card border-0 focus-visible:ring-1"
-                    rows={1}
-                  />
+                  <div className="flex items-start gap-2">
+                    <Textarea
+                      value={act.text}
+                      onChange={(e) => onUpdate(act.id, "text", e.target.value)}
+                      className="min-h-[2.5rem] text-sm resize-none bg-card border-0 focus-visible:ring-1 flex-1"
+                      rows={1}
+                    />
+                    <PhaseBadge category={act.category} />
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Select
                       value={act.unit_type ?? ""}
@@ -358,6 +405,12 @@ function ActivityTable({
                     {act.quantity != null && act.unit && (
                       <span className="text-xs text-muted-foreground font-mono bg-card rounded-lg px-2 py-1">
                         {act.quantity.toLocaleString()} {act.unit}
+                      </span>
+                    )}
+
+                    {act.category && (
+                      <span className="text-[10px] text-muted-foreground/70 font-mono bg-card rounded-lg px-2 py-1">
+                        {act.category}
                       </span>
                     )}
 
