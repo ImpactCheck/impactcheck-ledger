@@ -1,8 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { ComplianceBadge } from "@/components/ComplianceBadge";
-import { Building2, Zap } from "lucide-react";
+import { Building2, Zap, Loader2 } from "lucide-react";
 import { formatTonnes } from "@/contracts/impactcheck.v2";
-import type { Report } from "@/contracts/impactcheck.v2";
+import type { Report, JurisdictionCompliance } from "@/contracts/impactcheck.v2";
 
 const EMBODIED_COLOR = "hsl(30 80% 55%)";
 const OPERATIONAL_COLOR = "hsl(200 70% 50%)";
@@ -13,9 +13,35 @@ interface Props {
   hero?: boolean;
 }
 
+function jurisdictionStatus(j: JurisdictionCompliance | undefined): "green" | "yellow" | "red" {
+  if (!j?.checks) return "yellow";
+  const statuses = Object.values(j.checks).map((c) => c.status);
+  if (statuses.includes("FAIL")) return "red";
+  if (statuses.includes("MISSING")) return "yellow";
+  return "green";
+}
+
 export function ExecutiveSummarySection({ report, primaryRegion, hero }: Props) {
   const primaryTotal = report.totalsByRegion[primaryRegion] ?? 0;
   const phaseTotals = report.phaseTotalsByRegion?.[primaryRegion] ?? { embodied: 0, operational: 0 };
+  const byRegion = report.compliance.byRegion;
+  const hasCompliance = byRegion && Object.keys(byRegion).length > 0;
+
+  // Build compliance pills from byRegion data (year1 primary jurisdiction per region)
+  const compliancePills: { label: string; level: "green" | "yellow" | "red" }[] = [];
+  if (hasCompliance) {
+    for (const [, data] of Object.entries(byRegion)) {
+      const result = data.year1;
+      if (!result || result.error) continue;
+      const jurisdiction = result.primary_jurisdiction;
+      const primaryJur = result.jurisdictions?.[jurisdiction];
+      const status = jurisdictionStatus(primaryJur);
+      // Avoid duplicate jurisdictions
+      if (!compliancePills.find(p => p.label === jurisdiction)) {
+        compliancePills.push({ label: jurisdiction, level: status });
+      }
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -31,9 +57,17 @@ export function ExecutiveSummarySection({ report, primaryRegion, hero }: Props) 
             </p>
           )}
         </div>
-        <CardContent className="pt-4 pb-4 flex gap-3">
-          <ComplianceBadge level={report.compliance.us.status} />
-          <ComplianceBadge level={report.compliance.eu.status} />
+        <CardContent className="pt-4 pb-4 flex flex-wrap gap-2">
+          {hasCompliance ? (
+            compliancePills.map((pill) => (
+              <ComplianceBadge key={pill.label} level={pill.level} jurisdictionLabel={pill.label} />
+            ))
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Loading compliance…</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

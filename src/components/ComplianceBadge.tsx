@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 interface ComplianceBadgeProps {
   level: "green" | "yellow" | "red";
   className?: string;
+  /** Optional jurisdiction/type label (e.g. "Norway", "EU") */
+  jurisdictionLabel?: string;
   /** Use when badge is on a dark background (e.g. hero card) */
   onDark?: boolean;
 }
@@ -32,7 +34,7 @@ const config = {
   },
 };
 
-export function ComplianceBadge({ level, className, onDark }: ComplianceBadgeProps) {
+export function ComplianceBadge({ level, className, jurisdictionLabel, onDark }: ComplianceBadgeProps) {
   const { icon: Icon, label, className: levelClass, onDarkClassName } = config[level];
   return (
     <div
@@ -43,7 +45,7 @@ export function ComplianceBadge({ level, className, onDark }: ComplianceBadgePro
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      <span>Sovereign AI Compliance: {label}</span>
+      <span>{jurisdictionLabel ? `${jurisdictionLabel}: ${label}` : label}</span>
     </div>
   );
 }
