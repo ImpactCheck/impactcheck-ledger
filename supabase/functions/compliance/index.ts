@@ -6,21 +6,24 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const COMPLIANCE_PROMPT = `ROLE You are the Compliance Module for ImpactCheck v2. You are given: 1) The already-extracted activities (with regions, quantities, units, suppliers when available) 2) ImpactCheck computed outputs (CO2e totals, per-region totals, hotspots, confidence stats) 3) Any provided facility/company stats (energy/power numbers, location, revenue, "commercial operator" yes/no, etc.)
-TASK Evaluate the regulation checklists (Norway, EU, USA, Iceland) using ONLY explicit values available in the provided inputs. Return ONE JSON object ONLY (no prose, no markdown, no explanations).
-STRICT RULES (NO GUESSING)
-Do not guess or estimate missing inputs.
-Only use values explicitly provided in the inputs.
-If a value is not present, set status = "MISSING".
-If multiple conflicting values exist, status = "AMBIGUOUS" and do not evaluate dependent checks (set them to "MISSING").
-Unit conversion is allowed ONLY if the unit is explicit and conversion is standard (kW↔MW, kWh↔MWh↔GWh). If unclear, mark AMBIGUOUS.
-IMPORTANT ABOUT USA "DIRECT EMISSIONS"
-"Annual direct facility emissions" means Scope 1 emissions for the facility (not total project CO2e).
-If you only have ImpactCheck "total estimated emissions across activities" without an explicit label that it equals facility direct emissions, treat USA direct emissions input as MISSING.
-PRIMARY JURISDICTION LOGIC
-Always evaluate the primary jurisdiction.
-Also evaluate other jurisdictions ONLY if at least one of their key inputs is present (otherwise return them as NOT_EVALUATED).
-OUTPUT JSON SCHEMA (exact)
+const COMPLIANCE_PROMPT = `ROLE: You are the Compliance Module for ImpactCheck v2.
+
+You receive extracted activities with regions, quantities, units, and ImpactCheck computed CO₂e outputs.
+
+TASK: Evaluate the regulation checklists for the primary jurisdiction. Return ONE JSON object.
+
+EVALUATION RULES:
+1. BE CONFIDENT: When data clearly indicates a value (e.g., energy consumption from activities, total emissions), USE IT to evaluate checks. Do not mark as MISSING when a reasonable value can be derived.
+2. Total estimated emissions from ImpactCheck CAN be used as a proxy for facility emissions when the activities describe facility-level operations. Mark the input as PRESENT with a note about the source.
+3. If activities describe energy consumption (kWh, MWh, GWh), derive power demand and energy totals from them. Convert units as needed.
+4. Only mark as MISSING when there is genuinely NO data available — not when data requires simple derivation or unit conversion.
+5. When a threshold check cannot be evaluated, prefer FAIL (below threshold/not applicable) over MISSING if the available data suggests the facility is small/below thresholds.
+6. Unit conversions are always allowed: kW↔MW, kWh↔MWh↔GWh, TJ↔MWh (1 TJ = 277.78 MWh).
+
+PRIMARY JURISDICTION: Set "primary_jurisdiction" to the jurisdiction matching the region being evaluated.
+Evaluate the primary jurisdiction fully. Evaluate other jurisdictions ONLY if relevant inputs are present, otherwise set evaluation_status to "NOT_EVALUATED".
+
+OUTPUT JSON SCHEMA (exact):
 {
   "primary_jurisdiction": "<Norway|EU|USA|Iceland>",
   "jurisdictions": {
@@ -28,83 +31,84 @@ OUTPUT JSON SCHEMA (exact)
       "evaluation_status": "<EVALUATED|NOT_EVALUATED>",
       "inputs": {
         "<InputLine>": {
-          "status": "<PRESENT|MISSING|AMBIGUOUS>",
+          "status": "<PRESENT|MISSING>",
           "value": "<number or string or null>",
           "unit": "<unit or null>",
-          "source": "<where it came from or null>"
+          "source": "<description of where the value came from>"
         }
       },
       "checks": {
         "<ChecklistLine>": {
           "status": "<PASS|FAIL|MISSING>",
-          "computed_from": ["<InputLine>", "..."]
+          "computed_from": ["<InputLine>"]
         }
       }
     }
   }
 }
-STATUS MEANINGS
-inputs.status:
-PRESENT = value is explicitly provided and unambiguous
-MISSING = not found
-AMBIGUOUS = conflicting/unclear
-checks.status:
-PASS = condition/threshold is met (e.g., "required if >= X" and value meets it)
-FAIL = condition/threshold is not met
-MISSING = cannot evaluate because required input(s) are missing/ambiguous
-NORMALIZATION GUIDANCE
-kW to MW: divide by 1000
-MWh to GWh: divide by 1000
-kWh to MWh: divide by 1000
-If a doc says "capacity" but does not clarify subscribed vs supplied vs IT load, mark AMBIGUOUS.
-CHECKLISTS (USE THESE STRINGS EXACTLY AS JSON KEYS)
-NORWAY — Inputs
+
+CHECK STATUS MEANINGS:
+- PASS = the regulatory condition IS triggered (e.g., emissions exceed threshold, so reporting IS required)
+- FAIL = the regulatory condition is NOT triggered (e.g., emissions below threshold, reporting not required)
+- MISSING = truly cannot evaluate (no data at all, not even derivable)
+
+CHECKLISTS (USE THESE STRINGS EXACTLY AS JSON KEYS):
+
+NORWAY — Inputs:
 "Subscribed grid capacity for the site is provided (MW)"
 "Total supplied electrical power to the site is provided (MW)"
 "Annual energy use in Norway is provided (GWh/year)"
 "Installed IT power demand is provided (kW)"
 "Commercial data center operator is answered (Yes/No)"
-NORWAY — Checks
+
+NORWAY — Checks:
 "Registration required if commercial operator = Yes"
 "Registration required if subscribed grid capacity > 0.5 MW"
-"Mandatory energy mapping required if annual energy use ≥ 2.5 GWh/year"
+"Mandatory energy mapping required if annual energy use >= 2.5 GWh/year"
 "Waste-heat CBA required if total supplied electrical power > 2.0 MW"
-"EU data center reporting in-scope if installed IT power demand ≥ 500 kW"
-EU — Inputs
+"EU data center reporting in-scope if installed IT power demand >= 500 kW"
+
+EU — Inputs:
 "Installed IT power demand is provided (kW)"
 "Annual total data centre energy consumption is provided (MWh/year)"
 "Annual IT equipment energy consumption is provided (MWh/year)"
 "Average annual enterprise energy consumption over the previous 3 years is provided (TJ/year)"
 "Energy management system status is provided (Yes/No)"
-EU — Checks
-"EU data centre reporting required if installed IT power demand ≥ 500 kW"
-"EU best practices expected (encouraged) if installed IT power demand ≥ 1 MW"
+
+EU — Checks:
+"EU data centre reporting required if installed IT power demand >= 500 kW"
+"EU best practices expected (encouraged) if installed IT power demand >= 1 MW"
 "Energy management system required if average annual enterprise energy consumption > 85 TJ"
 "Energy audit required if average annual enterprise energy consumption > 10 TJ and no energy management system"
 "PUE must be reportable if annual total data centre energy + annual IT energy are provided"
-USA — Inputs
+
+USA — Inputs:
 "Facility location (state) is known"
 "Annual direct greenhouse gas emissions for the facility are provided (metric tons CO2e/year)"
 "Company annual revenue is provided (USD/year)"
 "Doing business in California is answered (Yes/No)"
 "Gross building floor area is provided (square feet)"
-USA — Checks
-"US federal GHG reporting required if annual facility direct emissions ≥ 25,000 metric tons CO2e/year"
-"California facility GHG reporting likely required if the facility is in California and annual facility direct emissions ≥ 10,000 metric tons CO2e/year"
+
+USA — Checks:
+"US federal GHG reporting required if annual facility direct emissions >= 25,000 metric tons CO2e/year"
+"California facility GHG reporting likely required if the facility is in California and annual facility direct emissions >= 10,000 metric tons CO2e/year"
 "California corporate GHG disclosures required if doing business in California = Yes and annual revenue > $1,000,000,000"
 "Washington Clean Buildings Performance Standard applies if the building is in Washington and gross floor area > 50,000 sq ft"
-ICELAND — Inputs
+
+ICELAND — Inputs:
 "Installed IT power demand is provided (kW)"
 "Total rated thermal input of any on-site fuel combustion equipment is provided (MWth)"
 "Electricity output of any on-site power installation is provided (MW)"
 "Heat output of any on-site geothermal thermal power installation is provided (MWth)"
-ICELAND — Checks
-"Data center reporting in-scope if installed IT power demand ≥ 500 kW"
+
+ICELAND — Checks:
+"Data center reporting in-scope if installed IT power demand >= 500 kW"
 "EU ETS in-scope if total rated thermal input of fuel combustion installations > 20 MWth"
-"Environmental Impact Assessment required if geothermal thermal power installation heat output ≥ 50 MW OR other power installation electricity output ≥ 10 MW"
-"Environmental assessment screening required if hydropower station output ≥ 100 kW"
-"Environmental assessment screening required if wind farm electricity output ≥ 2 MW OR geothermal heating production ≥ 2,500 kW gross power"
-END. OUTPUT JSON ONLY.`;
+"Environmental Impact Assessment required if geothermal thermal power installation heat output >= 50 MW OR other power installation electricity output >= 10 MW"
+"Environmental assessment screening required if hydropower station output >= 100 kW"
+"Environmental assessment screening required if wind farm electricity output >= 2 MW OR geothermal heating production >= 2,500 kW gross power"
+
+OUTPUT JSON ONLY. No prose, no markdown fences.`;
 
 // Categories considered "embodied" (one-time, year-1 only)
 const EMBODIED_CATEGORIES = [
@@ -121,10 +125,13 @@ function isEmbodiedCategory(category: string | null | undefined): boolean {
 
 function regionToJurisdiction(region: string): "Norway" | "EU" | "USA" | "Iceland" {
   const r = (region || "").toUpperCase();
-  if (r === "NO" || r === "NORWAY") return "Norway";
-  if (r === "EU") return "EU";
-  if (r === "US" || r === "USA") return "USA";
-  if (r === "IS" || r === "ICELAND") return "Iceland";
+  if (r === "NO" || r.includes("NORWAY")) return "Norway";
+  if (r === "EU" || r.includes("EUROPE")) return "EU";
+  if (r === "US" || r === "USA" || r.includes("UNITED STATES")) return "USA";
+  if (r === "IS" || r.includes("ICELAND")) return "Iceland";
+  // Map other European country codes to EU
+  const euCodes = ["DE", "FR", "ES", "IT", "NL", "BE", "AT", "SE", "DK", "FI", "PT", "IE", "PL", "CZ", "RO", "BG", "HR", "SK", "SI", "LT", "LV", "EE", "LU", "MT", "CY", "HU", "GR"];
+  if (euCodes.includes(r)) return "EU";
   return "USA";
 }
 
@@ -162,70 +169,80 @@ async function evaluateCompliance(
 
   const inputPayload = {
     region_evaluated: regionKey,
+    region_jurisdiction: primaryJurisdiction,
     period: periodLabel,
     primary_jurisdiction: primaryJurisdiction,
     activities: activitiesPayload,
     impactcheck_outputs: {
       total_estimated_emissions_kg_co2e: totalCo2eKg,
       total_estimated_emissions_metric_tons_co2e_per_year: totalCo2eTonnes,
-      note: `Total estimated ${periodLabel} emissions across activities for this region. NOT necessarily facility direct (Scope 1) emissions.`,
       hotspots,
-      confidence: estimates.length > 0
-        ? estimates.reduce((s: number, e: any) => s + (e.confidence || 0), 0) / estimates.length
-        : 0,
+      activity_count: activities.length,
+      estimate_count: estimates.length,
     },
-    facility_company_stats: {},
   };
 
-  const prompt = `${COMPLIANCE_PROMPT}\n\nIMPORTANT CONTEXT: This evaluation is for the "${periodLabel}" period.\n- "Year 1" includes both embodied (construction/hardware) and operational emissions.\n- "Following Years" includes only ongoing operational emissions (no embodied).\nConsider the total emissions value accordingly when evaluating thresholds.\n\nINPUTS:\n${JSON.stringify(inputPayload, null, 2)}`;
+  const prompt = `${COMPLIANCE_PROMPT}\n\nEVALUATION CONTEXT:\n- Region: ${regionKey} → Primary Jurisdiction: ${primaryJurisdiction}\n- Period: ${periodLabel}\n- "Year 1" includes embodied (construction/hardware) + operational emissions.\n- "Following Years" includes only ongoing operational emissions.\n\nINPUTS:\n${JSON.stringify(inputPayload, null, 2)}`;
 
-  const geminiResp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiApiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-      }),
+  try {
+    const geminiResp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.05,
+            maxOutputTokens: 8192,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
+
+    if (!geminiResp.ok) {
+      const errText = await geminiResp.text();
+      console.error(`Gemini compliance error (${periodLabel}, ${regionKey}):`, errText);
+      return {
+        error: "Compliance evaluation failed",
+        primary_jurisdiction: primaryJurisdiction,
+      };
     }
-  );
 
-  if (!geminiResp.ok) {
-    const errText = await geminiResp.text();
-    console.error(`Gemini compliance error (${periodLabel}):`, errText);
-    return {
-      error: "Compliance evaluation failed",
-      primary_jurisdiction: primaryJurisdiction,
-    };
-  }
+    const geminiData = await geminiResp.json();
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
 
-  const geminiData = await geminiResp.json();
-  let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  rawText = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-
-  let parsed: Record<string, unknown> = {};
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    let jsonStr = jsonMatch[0];
+    let parsed: Record<string, unknown>;
     try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      jsonStr = jsonStr.replace(/,\s*([}\]])/g, "$1");
-      jsonStr = jsonStr.replace(/(?<=:\s*"[^"]*)\n(?=[^"]*")/g, "\\n");
-      try {
-        parsed = JSON.parse(jsonStr);
-      } catch (e2) {
-        console.error("Failed to repair JSON:", e2);
+      parsed = JSON.parse(rawText);
+    } catch (e) {
+      console.error("JSON parse error:", e, "Raw:", rawText.substring(0, 200));
+      // Fallback: try to extract JSON
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {
+          parsed = {};
+        }
+      } else {
+        parsed = {};
       }
     }
-  }
 
-  return {
-    ...parsed,
-    totalCo2eKg,
-    totalCo2eTonnes,
-  };
+    return {
+      ...parsed,
+      totalCo2eKg,
+      totalCo2eTonnes,
+    };
+  } catch (err) {
+    console.error(`Compliance evaluation error (${periodLabel}, ${regionKey}):`, err);
+    return {
+      error: "Compliance evaluation failed",
+      primary_jurisdiction: regionToJurisdiction(regionKey),
+    };
+  }
 }
 
 serve(async (req) => {
@@ -255,15 +272,15 @@ serve(async (req) => {
       .eq("project_id", projectId)
       .order("created_at", { ascending: true });
 
-    const { data: estimates } = await supabase
-      .from("estimates")
-      .select("*")
-      .eq("project_id", projectId);
+    // Fetch BOTH primary estimates and simulation estimates
+    const [{ data: estimates }, { data: simEstimates }] = await Promise.all([
+      supabase.from("estimates").select("*").eq("project_id", projectId),
+      supabase.from("simulation_estimates").select("*").eq("project_id", projectId),
+    ]);
 
-    const regions = [
-      project?.primary_region,
-      ...(project?.comparison_regions || []),
-    ].filter(Boolean) as string[];
+    const primaryRegion = project?.primary_region;
+    const comparisonRegions = project?.comparison_regions || [];
+    const regions = [primaryRegion, ...comparisonRegions].filter(Boolean) as string[];
 
     if (regions.length === 0) {
       return new Response(
@@ -272,7 +289,7 @@ serve(async (req) => {
       );
     }
 
-    // Build a lookup: activityId -> category (for phase classification)
+    // Build activity lookup
     const activityMap = new Map<string, any>();
     for (const a of (activities || [])) {
       activityMap.set(a.id, a);
@@ -280,20 +297,29 @@ serve(async (req) => {
 
     const byRegion: Record<string, unknown> = {};
 
-    // Process all regions in parallel, each with year1 and ongoing evaluations
     const regionPromises = regions.map(async (regionKey) => {
-      const regionEstimates = (estimates || []).filter(
-        (e: any) => (e.region || "").toLowerCase() === regionKey.toLowerCase()
-      );
+      // For primary region, use `estimates` table
+      // For comparison regions, use `simulation_estimates` table filtered by simulation_region
+      const isPrimary = regionKey === primaryRegion;
+      let regionEstimates: any[];
 
-      // Split estimates by phase
-      const year1Estimates = regionEstimates; // All estimates (embodied + operational)
+      if (isPrimary) {
+        regionEstimates = (estimates || []).filter(
+          (e: any) => (e.region || "").toLowerCase() === regionKey.toLowerCase()
+        );
+      } else {
+        regionEstimates = (simEstimates || []).filter(
+          (e: any) => (e.simulation_region || "").toLowerCase() === regionKey.toLowerCase()
+        );
+      }
+
+      // Split by phase
+      const year1Estimates = regionEstimates;
       const ongoingEstimates = regionEstimates.filter((e: any) => {
         const act = activityMap.get(e.activity_id);
         return !isEmbodiedCategory(act?.category);
       });
 
-      // Activities relevant to each period
       const allActs = activities || [];
       const ongoingActivities = allActs.filter((a: any) => !isEmbodiedCategory(a.category));
 
