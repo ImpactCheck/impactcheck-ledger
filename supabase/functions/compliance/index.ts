@@ -249,7 +249,27 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { projectId, forceRefresh } = await req.json();
+    let body: { projectId?: string; forceRefresh?: boolean };
+    try {
+      const text = await req.text();
+      if (!text || text.trim() === "") {
+        return new Response(
+          JSON.stringify({ error: "Request body is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      body = JSON.parse(text);
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        return new Response(
+          JSON.stringify({ error: "Invalid JSON in request body" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      throw e;
+    }
+
+    const { projectId, forceRefresh } = body;
     if (!projectId) throw new Error("projectId required");
 
     const supabase = createClient(
