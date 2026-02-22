@@ -399,9 +399,8 @@ serve(async (req) => {
       let regionEstimates: any[];
 
       if (isPrimary) {
-        regionEstimates = (estimates || []).filter(
-          (e: any) => (e.region || "").toLowerCase() === regionKey.toLowerCase()
-        );
+        // All estimates in the estimates table belong to the primary region
+        regionEstimates = estimates || [];
       } else {
         regionEstimates = (simEstimates || []).filter(
           (e: any) => (e.simulation_region || "").toLowerCase() === regionKey.toLowerCase()
