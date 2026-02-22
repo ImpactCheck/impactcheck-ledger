@@ -51,8 +51,8 @@ export interface ImpactcheckClient {
   // Report
   getReport(projectId: string): Promise<Report>;
 
-  // Compliance (per-region regulatory compliance via Gemini)
-  getCompliance(projectId: string): Promise<{ byRegion: Record<string, RegionComplianceByPeriod> }>;
+  // Compliance (per-region regulatory compliance via Gemini, persisted per project)
+  getCompliance(projectId: string, options?: { forceRefresh?: boolean }): Promise<{ byRegion: Record<string, RegionComplianceByPeriod> }>;
 
   // Recommendations
   // Recommendations (job-based)

@@ -350,7 +350,7 @@ export function createMockAdapter(): ImpactcheckClient {
       return buildReport(projectId);
     },
 
-    async getCompliance() {
+    async getCompliance(_projectId, _options?) {
       return { byRegion: {} };
     },
 
