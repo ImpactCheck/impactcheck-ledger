@@ -670,10 +670,10 @@ export default function EmissionsCalculation() {
                       All ({activities.length})
                     </TabsTrigger>
                     <TabsTrigger value="embodied" className="rounded-lg text-xs px-3">
-                      Embodied ({phaseCounts.embodied})
+                      Embodied / Year 1 ({phaseCounts.embodied})
                     </TabsTrigger>
                     <TabsTrigger value="operational" className="rounded-lg text-xs px-3">
-                      Operational ({phaseCounts.operational})
+                      Operational / annual ({phaseCounts.operational})
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -853,14 +853,14 @@ export default function EmissionsCalculation() {
                 <div className="space-y-3">
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Embodied</span>
+                      <span className="text-muted-foreground">Embodied (Year 1)</span>
                       <span className="font-mono">{embodiedPct}%</span>
                     </div>
                     <Progress value={embodiedPct} className="h-1.5" />
                   </div>
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Operational</span>
+                      <span className="text-muted-foreground">Operational (annual)</span>
                       <span className="font-mono">{operationalPct}%</span>
                     </div>
                     <Progress value={operationalPct} className="h-1.5" />

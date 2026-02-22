@@ -31,7 +31,7 @@ export function PhaseSplitSection({ phaseTotals, hero }: Props) {
     <Card className={`card-elevated border-0 print:border print:shadow-none ${hero ? "ring-1 ring-primary/20" : ""}`}>
       <CardHeader>
         <CardTitle className={hero ? "text-xl" : "text-lg"}>Embodied vs Operational Split</CardTitle>
-        <CardDescription>Breakdown of lifecycle carbon by emission phase</CardDescription>
+        <CardDescription>Embodied carbon applies in Year 1 only (alongside operational). Subsequent years incur operational carbon only.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[220px] relative">
@@ -65,11 +65,11 @@ export function PhaseSplitSection({ phaseTotals, hero }: Props) {
         <div className="flex items-center gap-4 mt-2 justify-center text-[11px] text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: EMBODIED_COLOR }} />
-            Embodied: {formatTonnes(embodied)} t
+            Embodied (Year 1): {formatTonnes(embodied)} t
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: OPERATIONAL_COLOR }} />
-            Operational: {formatTonnes(operational)} t
+            Operational (annual): {formatTonnes(operational)} t
           </div>
         </div>
       </CardContent>

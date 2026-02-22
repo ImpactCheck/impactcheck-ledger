@@ -23,7 +23,7 @@ export function MissingDataSection({ report, hero }: Props) {
     gaps.push("Only one region assessed — consider adding comparison regions for broader coverage.");
   }
   if (report.hotspots.some((h) => !h.phase)) {
-    gaps.push("Some hotspot activities lack phase classification (embodied/operational).");
+    gaps.push("Some hotspot activities lack phase classification (embodied = Year 1 only, operational = annual).");
   }
   if (gaps.length === 0) {
     gaps.push("No significant evidence gaps detected in the current dataset.");
