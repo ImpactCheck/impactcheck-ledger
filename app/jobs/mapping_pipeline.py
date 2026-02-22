@@ -15,7 +15,6 @@ from app.climatiq_client import (
     map_region_to_climatiq,
     search_factors,
 )
-from app.jobs.gemini_estimation import estimate_co2e_with_gemini
 from app.models import (
     ActivityEstimate,
     EstimateInputUsed,
@@ -222,35 +221,6 @@ def _retry_with_factor_unit_types(
     return None
 
 
-def _make_gemini_estimate(
-    activity: ExtractedActivity,
-    factor: dict[str, Any] | None,
-    co2e_kg: float,
-) -> ActivityEstimate:
-    """Build an ActivityEstimate from a Gemini-generated CO2e value."""
-    return ActivityEstimate(
-        activityId=activity.id,
-        region=activity.region,
-        matchedFactor=MatchedFactor(
-            id=factor.get("activity_id", "gemini-estimate") if factor else "gemini-estimate",
-            name=factor.get("name", "Gemini AI Estimate") if factor else "Gemini AI Estimate",
-            source="Gemini AI",
-            year=None,
-            unit=_factor_unit(factor) if factor else None,
-        ),
-        confidence=0.45,
-        co2eKg=co2e_kg,
-        inputUsed=EstimateInputUsed(
-            unit_type=activity.unit_type,
-            quantity=activity.quantity,
-            amount=activity.amount,
-            currency=activity.currency,
-            note="gemini_fallback",
-        ),
-        mapping_confidence="low",
-    )
-
-
 def _store_cache(
     cache_key: str,
     activity: ExtractedActivity,
@@ -367,32 +337,12 @@ def run_mapping_pipeline(
         }.get(search_result.fallback_used, "low")
 
         if not factor:
-            if gemini_api_key:
-                co2e = estimate_co2e_with_gemini(
-                    gemini_api_key, activity.text, activity.quantity, activity.unit, activity.unit_type,
-                    doc_parts=doc_parts,
-                )
-                if co2e is not None and co2e > 0:
-                    estimates_out.append(_make_gemini_estimate(activity, None, co2e))
-                    continue
+            # No Climatiq data: ZERO carbon impact only — no LLM estimates allowed
             estimates_out.append(_make_zero_estimate(activity))
             continue
 
         if activity.quantity is None and activity.amount is None:
-            if gemini_api_key:
-                co2e = estimate_co2e_with_gemini(
-                    gemini_api_key,
-                    activity.text,
-                    None,
-                    activity.unit,
-                    activity.unit_type,
-                    factor_name=factor.get("name"),
-                    factor_unit=_factor_unit(factor),
-                    doc_parts=doc_parts,
-                )
-                if co2e is not None and co2e > 0:
-                    estimates_out.append(_make_gemini_estimate(activity, factor, co2e))
-                    continue
+            # No quantity: ZERO carbon impact only — no LLM estimates allowed
             estimates_out.append(_make_needs_quantity_estimate(activity, factor, confidence_level))
             continue
 
@@ -455,23 +405,7 @@ def run_mapping_pipeline(
                     )
                     continue
 
-                # Step 2: Gemini fallback estimation
-                if gemini_api_key:
-                    co2e = estimate_co2e_with_gemini(
-                        gemini_api_key,
-                        activity.text,
-                        activity.quantity,
-                        activity.unit,
-                        activity.unit_type,
-                        factor_name=factor.get("name"),
-                        factor_unit=_factor_unit(factor),
-                        doc_parts=doc_parts,
-                    )
-                    if co2e is not None and co2e > 0:
-                        estimates_out.append(_make_gemini_estimate(activity, factor, co2e))
-                        continue
-
-                # Step 3: Zero estimate with reduced confidence
+                # Step 2: ZERO carbon impact — no LLM estimates when Climatiq fails
                 estimates_out.append(
                     _build_estimate(activity, factor, {}, 0.0, confidence_level, confidence_mult=0.5)
                 )

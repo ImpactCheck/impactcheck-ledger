@@ -374,18 +374,12 @@ function fallbackEstimate(projectId: string, act: any, factor: any | null, confi
 }
 
 function stubEstimate(act: any, _query: string, regionKey: string) {
-  const base = Math.abs(simpleHash(act.text + regionKey));
+  // Stub mode: ZERO carbon impact only — no estimates without Climatiq API data
   return {
     matched_factor: { id: `stub_${act.id}`, name: `Stub factor for ${act.text.slice(0, 30)}`, source: "Stub (no CLIMATIQ_API_KEY)", year: 2025 },
     confidence: 0.3,
-    co2e_kg: 500 + (base % 600000),
+    co2e_kg: 0,
   };
-}
-
-function simpleHash(str: string): number {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
-  return Math.abs(h);
 }
 
 function parseValidUnitTypes(errorText: string): string[] {
@@ -413,9 +407,10 @@ async function llmConvertUnits(act: any, validTypes: string[]): Promise<any | nu
   if (!GEMINI_API_KEY) return null;
   try {
     const prompt = `Convert this activity data to one of these Climatiq parameter types: ${validTypes.join(", ")}.
+We require Climatiq API data for carbon estimates — ZERO is output when no valid conversion exists. Do NOT fabricate.
 Activity: "${act.text}", quantity=${act.quantity}, unit="${act.unit}", unit_type="${act.unit_type}", amount=${act.amount}, currency="${act.currency}".
-Return ONLY a JSON object with the converted parameters (e.g. {"energy": 100, "energy_unit": "kWh"}).`;
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+Return ONLY a JSON object with the converted parameters (e.g. {"energy": 100, "energy_unit": "kWh"}). If conversion is not defensible, return {"_skip": true}.`;
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0, maxOutputTokens: 200 } }),
@@ -423,9 +418,11 @@ Return ONLY a JSON object with the converted parameters (e.g. {"energy": 100, "e
     if (!resp.ok) return null;
     const data = await resp.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const jsonMatch = text.match(/\{[^}]+\}/);
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
-    return JSON.parse(jsonMatch[0]);
+    const params = JSON.parse(jsonMatch[0]);
+    if (params._skip === true) return null;
+    return params;
   } catch { return null; }
 }
 

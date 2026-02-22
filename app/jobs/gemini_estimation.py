@@ -12,7 +12,7 @@ import urllib.request
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-3-flash-preview"
+GEMINI_MODEL = "gemini-3.1-pro-preview"
 GEMINI_ESTIMATION_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     f"{GEMINI_MODEL}:generateContent"
@@ -51,7 +51,7 @@ assume 5-year lifetime → 300 kgCO2e/unit/year.
 Additional guidelines:
 - If quantity is unknown, search the document context above for the relevant quantity; \
 if not found use a conservative representative amount for a mid-size AI data center.
-- Do NOT return 0; always provide a best-effort positive estimate.
+- If no reliable data or conversion is possible, you MUST return co2e_kg: 0. ZERO carbon impact is required when data is insufficient.
 - Be honest about confidence: "high" only if a specific quantity and unit are given.
 
 Respond with ONLY a JSON object (no markdown fences, no explanation):

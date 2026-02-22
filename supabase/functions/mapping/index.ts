@@ -494,7 +494,7 @@ async function llmConvertUnits(act: any, validUnitTypes: string[]): Promise<any 
 
   const prompt = `You are an expert in carbon accounting unit conversions.
 
-An activity needs a CO2 emission estimate but Climatiq rejected the unit type.
+An activity needs Climatiq API parameters but the unit type was rejected. We require Climatiq API data for carbon estimates — ZERO carbon impact is output when no valid API data exists. Do NOT fabricate estimates.
 
 Activity details:
 - Text: "${act.text}"
@@ -506,8 +506,8 @@ Activity details:
 
 Climatiq requires one of these unit types: ${JSON.stringify(validUnitTypes)}
 
-Convert the activity data into Climatiq API parameters using one of the valid unit types.
-Use reasonable engineering assumptions if needed (e.g. solar panel capacity → annual energy output in kWh, passenger flight → passenger-km, container shipping → container-km).
+Convert the activity data into Climatiq API parameters using one of the valid unit types ONLY if a defensible conversion exists. If conversion is not possible with reasonable confidence, respond with {"_skip": true}.
+Use reasonable engineering assumptions when conversion is clear (e.g. solar panel capacity → annual energy output in kWh).
 
 Respond ONLY with a JSON object containing the Climatiq parameters. Examples:
 - For "Power" type: {"energy": 8760, "energy_unit": "kWh"} (1 kW * 8760 hours/year)
@@ -544,6 +544,7 @@ Respond with ONLY the JSON object, no explanation.`;
     if (!jsonMatch) return null;
 
     const params = JSON.parse(jsonMatch[0]);
+    if (params._skip === true) return null;
     console.log(`LLM converted "${act.text}" (${act.unit_type}) → ${JSON.stringify(params)}`);
     return params;
   } catch (err) {
@@ -602,21 +603,7 @@ function stubEstimate(act: any, searchQuery: string, regionKey: string) {
     factorName = "Water supply";
   }
 
-  const quantity = act.quantity || act.amount || 1;
-  const factors: Record<string, number> = {
-    Weight: 0.9,
-    Energy: 0.4,
-    Volume: 2.7,
-    Money: 0.5,
-    Power: 0.4 * 8760,
-    Distance: 0.12,
-    Number: 50,
-    Area: 15,
-  };
-  const baseFactor = factors[act.unit_type as string] || 1.0;
-  const regionMult = REGION_STUB_MULTIPLIERS[regionKey] ?? 1.0;
-  const co2e_kg = quantity * baseFactor * regionMult;
-
+  // Stub mode: ZERO carbon impact only — no estimates without Climatiq API data
   return {
     matched_factor: {
       id: activityId,
@@ -626,7 +613,7 @@ function stubEstimate(act: any, searchQuery: string, regionKey: string) {
       unit: act.unit_type,
     },
     confidence: 0.5,
-    co2e_kg: Math.round(co2e_kg * 100) / 100,
+    co2e_kg: 0,
   };
 }
 
