@@ -2,7 +2,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, ArrowRight, Upload as UploadIcon, FileSpreadsheet,
-  FileText as FileTextIcon, Check, Loader2, ChevronRight, Lightbulb, Info,
+  FileText as FileTextIcon, FileCode, File, Check, Loader2,
+  ChevronRight, Lightbulb, Info, Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -10,6 +11,21 @@ import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
 import type { Document } from "@/contracts/impactcheck.v2";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+function fileIcon(fileType: string) {
+  switch (fileType.toLowerCase()) {
+    case "pdf":
+      return <FileTextIcon className="h-4 w-4 text-red-500" />;
+    case "xlsx":
+    case "csv":
+      return <FileSpreadsheet className="h-4 w-4 text-green-500" />;
+    case "json":
+      return <FileCode className="h-4 w-4 text-blue-500" />;
+    default:
+      return <File className="h-4 w-4 text-muted-foreground" />;
+  }
+}
 
 export default function Upload() {
   const navigate = useNavigate();
@@ -20,6 +36,7 @@ export default function Upload() {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [justUploaded, setJustUploaded] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadDocs = useCallback(() => {
@@ -62,10 +79,17 @@ export default function Upload() {
     setDragOver(false);
   };
 
-  const fileIcon = (ft: string) => {
-    if (ft === "csv" || ft === "xlsx")
-      return <FileSpreadsheet className="h-4 w-4 text-primary" />;
-    return <FileTextIcon className="h-4 w-4 text-primary" />;
+  const handleDelete = async (docId: string) => {
+    setDeletingId(docId);
+    try {
+      await api.deleteDocument(projectId, docId);
+      setDocs((prev) => prev.filter((d) => d.id !== docId));
+      toast.success("File removed");
+    } catch {
+      toast.error("Failed to delete file");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const hasDocs = docs.length > 0;
@@ -178,18 +202,31 @@ export default function Upload() {
                       {fileIcon(doc.fileType)}
                       <span className="font-mono text-sm truncate">{doc.filename}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs shrink-0 ml-3">
-                      {doc.status === "processing" ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                          <span className="text-muted-foreground">Analyzing… 45%</span>
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-primary font-medium">Upload Complete</span>
-                        </>
-                      )}
+                    <div className="flex items-center gap-3 shrink-0 ml-3">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        {doc.status === "processing" ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            <span className="text-muted-foreground">Analyzing…</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-primary" />
+                            <span className="text-primary font-medium">Ready</span>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDelete(doc.id)}
+                        disabled={deletingId === doc.id}
+                        className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Delete file"
+                      >
+                        {deletingId === doc.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Trash2 className="h-3.5 w-3.5" />
+                        }
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -200,13 +237,13 @@ export default function Upload() {
           {/* Auto-proceed prompt */}
           {justUploaded && hasDocs && (
             <button
-              onClick={() => navigate("/activities")}
+              onClick={() => navigate("/emissions")}
               className="w-full auto-start-banner flex items-center justify-between cursor-pointer group hover:opacity-90 transition-opacity text-left"
             >
               <div>
                 <p className="text-sm font-semibold text-primary">Files uploaded successfully</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Ready to extract activities — click to continue
+                  Ready to calculate emissions — click to continue
                 </p>
               </div>
               <ChevronRight className="h-5 w-5 text-primary group-hover:translate-x-0.5 transition-transform shrink-0" />
@@ -220,8 +257,8 @@ export default function Upload() {
                 <span className="font-semibold text-foreground">{docs.length}</span> documents ·{" "}
                 <span className="font-semibold text-primary">{readyDocs}</span> ready
               </span>
-              <Button onClick={() => navigate("/activities")} className="gap-2 rounded-xl">
-                Continue to Activities <ArrowRight className="h-4 w-4" />
+              <Button onClick={() => navigate("/emissions")} className="gap-2 rounded-xl">
+                Continue to Emissions <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           )}
@@ -232,7 +269,7 @@ export default function Upload() {
               <ArrowLeft className="h-4 w-4" /> Back
             </Button>
             {!hasDocs && (
-              <Button onClick={() => navigate("/activities")} disabled={!hasDocs} className="gap-2 rounded-xl">
+              <Button onClick={() => navigate("/emissions")} disabled={!hasDocs} className="gap-2 rounded-xl">
                 Continue <ArrowRight className="h-4 w-4" />
               </Button>
             )}

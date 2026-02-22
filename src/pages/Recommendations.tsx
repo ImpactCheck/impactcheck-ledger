@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingDown, Loader2, Check, Lock, Download, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, TrendingDown, Loader2, Check, Lock, Download, ChevronDown, ChevronUp, CheckCircle, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { api } from "@/api";
@@ -8,6 +8,7 @@ import type { Recommendation } from "@/contracts/impactcheck.v2";
 import { formatTonnes } from "@/contracts/impactcheck.v2";
 import { useProject } from "@/contexts/ProjectContext";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +36,24 @@ function PhasePill({ phase }: { phase: "operational" | "embodied" }) {
   );
 }
 
+function ConfidenceBadge({ confidence }: { confidence: number }) {
+  const isHigh = confidence >= 90;
+  return (
+    <span className={cn(
+      "flex items-center gap-1 text-[9px] font-mono font-bold border rounded-full px-2 py-0.5",
+      isHigh
+        ? "text-green-700 bg-green-50 border-green-200 dark:text-green-300 dark:bg-green-900/20 dark:border-green-800"
+        : "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800"
+    )}>
+      {isHigh
+        ? <CheckCircle className="h-2.5 w-2.5" />
+        : <AlertCircle className="h-2.5 w-2.5" />
+      }
+      {confidence}% CONF
+    </span>
+  );
+}
+
 export default function Recommendations() {
   const navigate = useNavigate();
   const { project } = useProject();
@@ -47,6 +66,7 @@ export default function Recommendations() {
   const [finalizing, setFinalizing] = useState(false);
   const [finalText, setFinalText] = useState<string | null>(null);
   const [phaseFilter, setPhaseFilter] = useState<"all" | "operational" | "embodied">("all");
+  const [sortBy, setSortBy] = useState<"impact" | "latest" | "phase">("impact");
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -77,9 +97,19 @@ export default function Recommendations() {
     }
   };
 
-  const filteredRecs = recs.filter((_, idx) => {
+  const sortedRecs = [...recs].sort((a, b) => {
+    if (sortBy === "impact") return Math.abs(b.expectedDeltaKg) - Math.abs(a.expectedDeltaKg);
+    if (sortBy === "phase") {
+      const ia = recs.indexOf(a), ib = recs.indexOf(b);
+      return getMeta(ia).phase.localeCompare(getMeta(ib).phase);
+    }
+    return 0; // latest = original order
+  });
+
+  const filteredRecs = sortedRecs.filter((_, idx) => {
+    const originalIdx = recs.indexOf(sortedRecs[idx]);
     if (phaseFilter === "all") return true;
-    return getMeta(idx).phase === phaseFilter;
+    return getMeta(originalIdx).phase === phaseFilter;
   });
 
   const totalSavingsKg = recs.reduce((sum, r) => sum + Math.abs(r.expectedDeltaKg), 0);
@@ -89,7 +119,8 @@ export default function Recommendations() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="step-number mb-1">Step 07</p>
+          <p className="step-number mb-1">Step 06</p>
+
           <h1 className="text-2xl font-bold tracking-tight">Reduction Strategies</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Actionable strategies to reduce your carbon footprint.</p>
         </div>
@@ -127,28 +158,40 @@ export default function Recommendations() {
         </Card>
       )}
 
-      {/* Filter bar */}
+      {/* Filter + sort bar */}
       {recs.length > 0 && (
-        <div className="flex items-center gap-2">
-          {(["all", "operational", "embodied"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setPhaseFilter(f)}
-              className={cn(
-                "text-xs font-semibold rounded-full px-4 py-1.5 border transition-all cursor-pointer",
-                phaseFilter === f
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-muted text-muted-foreground border-border hover:border-primary/40"
-              )}
-            >
-              {f === "all" ? "All Phases" : f === "operational" ? "Operational" : "Embodied"}
-            </button>
-          ))}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            {(["all", "operational", "embodied"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setPhaseFilter(f)}
+                className={cn(
+                  "text-xs font-semibold rounded-full px-4 py-1.5 border transition-all cursor-pointer",
+                  phaseFilter === f
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted text-muted-foreground border-border hover:border-primary/40"
+                )}
+              >
+                {f === "all" ? "All Phases" : f === "operational" ? "Operational" : "Embodied"}
+              </button>
+            ))}
+          </div>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="h-8 w-44 text-xs rounded-xl">
+              <SelectValue placeholder="Sort by…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="impact" className="text-xs">Highest Impact</SelectItem>
+              <SelectItem value="latest" className="text-xs">Latest</SelectItem>
+              <SelectItem value="phase" className="text-xs">Phase</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       )}
 
       {/* Strategy cards */}
-      {filteredRecs.map((rec, recIdx) => {
+      {filteredRecs.map((rec) => {
         const idx = recs.indexOf(rec);
         const meta = getMeta(idx);
         const isExpanded = expandedId === rec.id;
@@ -166,9 +209,7 @@ export default function Recommendations() {
                 <div className="space-y-1.5 flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <PhasePill phase={meta.phase} />
-                    <span className="text-[9px] font-mono font-bold text-muted-foreground border border-border rounded-full px-2 py-0.5">
-                      {meta.confidence}% CONFIDENCE
-                    </span>
+                    <ConfidenceBadge confidence={meta.confidence} />
                   </div>
                   <CardTitle className="text-base flex items-center gap-2">
                     <TrendingDown className="h-4 w-4 text-primary shrink-0" />
@@ -186,6 +227,16 @@ export default function Recommendations() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">{rec.summary}</p>
+
+              {/* AI Strategy Note box */}
+              <div
+                className="rounded-xl px-4 py-3 border-l-4 border-primary"
+                style={{ backgroundColor: "#112218" }}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1.5">AI Strategy Note</p>
+                <p className="text-xs text-green-200/80 leading-relaxed">{rec.summary}</p>
+              </div>
+
               {rec.constraints && rec.constraints.length > 0 && (
                 <p className="text-[11px] text-muted-foreground/70">⚠ {rec.constraints.join("; ")}</p>
               )}
@@ -207,7 +258,7 @@ export default function Recommendations() {
                     </div>
                     <div className="rounded-xl bg-muted/50 p-3 text-sm flex-1">
                       <p className="text-xs text-muted-foreground mb-1 font-semibold">Generated Strategy</p>
-                      <p>{rec.summary}</p>
+                      <p>{rec.strategyDraftText || rec.summary}</p>
                     </div>
                   </div>
                   {!finalized && (

@@ -26,6 +26,7 @@ export interface Document {
   status: "pending" | "processing" | "ready" | "error";
   uploadedAt: string;
   jobId?: string;
+  storagePath?: string;
 }
 
 export interface JobStatus {
@@ -53,17 +54,32 @@ export interface ExtractedActivity {
   sourceDocumentId?: string;
   note?: string;
   category?: string;
+  phase?: "embodied" | "operational";
+  phaseReason?: string;
 }
 
 // ─── Activity Phase Classification ───────────────────────────────────
 
 export type ActivityPhase = "embodied" | "operational";
 
-const EMBODIED_CATEGORIES = ["HARDWARE", "CONSTRUCTION", "PROCUREMENT"];
+const EMBODIED_CATEGORIES = [
+  "HARDWARE", "CONSTRUCTION", "PROCUREMENT", "MANUFACTURING",
+  "INFRASTRUCTURE", "EQUIPMENT", "INSTALLATION", "CAPEX", "MATERIAL",
+  "NETWORK_HARDWARE", "COOLING_EQUIPMENT", "ELECTRICAL", "CIVIL",
+];
+
+const OPERATIONAL_CATEGORIES = [
+  "ENERGY", "ELECTRICITY", "POWER", "FUEL", "COOLING", "WATER",
+  "TRANSPORT", "CLOUD", "DATA_TRANSFER", "MAINTENANCE", "OPERATIONS",
+  "STAFFING", "OPEX",
+];
 
 export function getActivityPhase(category: string | undefined): ActivityPhase {
   if (!category) return "operational";
-  return EMBODIED_CATEGORIES.includes(category.toUpperCase()) ? "embodied" : "operational";
+  const upper = category.toUpperCase();
+  if (EMBODIED_CATEGORIES.some((c) => upper.includes(c))) return "embodied";
+  if (OPERATIONAL_CATEGORIES.some((c) => upper.includes(c))) return "operational";
+  return "operational";
 }
 
 export interface ActivityEstimate {

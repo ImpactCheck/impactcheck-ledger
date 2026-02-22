@@ -19,21 +19,40 @@ GEMINI_ESTIMATION_URL = (
 )
 
 _ESTIMATION_PROMPT = """\
-You are a carbon footprint expert. Estimate the CO2e emissions in kilograms \
-(kg CO2 equivalent) for the activity described below.
+You are a carbon footprint expert specialising in AI data-center infrastructure.
+Estimate the TOTAL annual CO2e emissions in kilograms (kg CO2 equivalent) for the \
+activity described below.
 {doc_context_line}
 Activity: {activity_text}
 Quantity: {quantity_str}
 {factor_line}
-Guidelines:
-- Use IPCC / GHG Protocol / Ecoinvent global average emission intensities
-- For materials: include manufacturing + upstream transport emissions
-- For energy: use global average grid intensity (~0.45 kgCO2e/kWh) unless region stated
-- For servers/hardware: use lifecycle embedded carbon (approx 1,000-3,000 kgCO2e per server)
-- For transport: use typical freight emission factors (road ~0.1, sea ~0.01, air ~0.6 kgCO2e/t-km)
-- Be conservative: prefer slightly lower estimates over speculation
+
+IMPORTANT — ANNUALISATION RULES:
+- Your answer must represent a FULL YEAR of impact (12 months).
+- EMBODIED (one-time capital items): divide lifetime emissions by the asset lifetime.
+  • GPU / AI accelerator (H100, A100, GB200): ~1,500 kgCO2e embodied per unit; \
+assume 5-year lifetime → 300 kgCO2e/unit/year.
+  • Standard server / rack server: ~1,000 kgCO2e; 5-year → 200 kgCO2e/unit/year.
+  • Networking switch/router: ~200 kgCO2e; 5-year → 40 kgCO2e/unit/year.
+  • UPS / PDU / power equipment: ~500 kgCO2e; 10-year → 50 kgCO2e/unit/year.
+  • Data-center construction: ~500 kgCO2e/m²; 25-year → 20 kgCO2e/m²/year.
+  • Cooling unit (CRAC/CRAH): ~2,000 kgCO2e; 15-year → 133 kgCO2e/unit/year.
+- OPERATIONAL (recurring): scale raw quantity to a full year if needed.
+  • Electricity: use grid intensity by region:
+      texas_ercot ~0.39, virginia_pjm ~0.32, iowa_miso ~0.43,
+      norway_hydro ~0.02, iceland_geo ~0.03, singapore ~0.41,
+      global average ~0.45 kgCO2e/kWh.
+    If the quantity is in kW (power), multiply by 8,760 h/year first.
+  • Diesel / HVO fuel: 2.68 kgCO2e/litre; scale monthly → ×12 or daily → ×365.
+  • Natural gas: 2.04 kgCO2e/m³.
+  • Water (cooling towers): 0.0003 kgCO2e/litre.
+  • Cloud / data-transfer fees: use ~0.008 kgCO2e/GB transferred.
+
+Additional guidelines:
 - If quantity is unknown, search the document context above for the relevant quantity; \
-if not found assume a representative single unit or typical annual amount
+if not found use a conservative representative amount for a mid-size AI data center.
+- Do NOT return 0; always provide a best-effort positive estimate.
+- Be honest about confidence: "high" only if a specific quantity and unit are given.
 
 Respond with ONLY a JSON object (no markdown fences, no explanation):
 {{"co2e_kg": <number>, "confidence": "high|medium|low", "rationale": "<one sentence>"}}"""

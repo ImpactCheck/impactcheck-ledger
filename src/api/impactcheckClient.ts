@@ -24,6 +24,7 @@ export interface ImpactcheckClient {
   // Documents
   uploadDocument(projectId: string, file: File): Promise<Document>;
   listDocuments(projectId: string): Promise<Document[]>;
+  deleteDocument(projectId: string, documentId: string): Promise<void>;
 
   // Extraction
   startExtract(projectId: string): Promise<JobStatus>;

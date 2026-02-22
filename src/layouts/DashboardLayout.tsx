@@ -2,7 +2,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useProject } from "@/contexts/ProjectContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
-  Settings, Upload, Activity, GitMerge, FileText, Lightbulb,
+  Settings, Upload, Zap, FileText, Lightbulb,
   Check, Sun, Moon, LayoutDashboard, BarChart2, User,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
@@ -27,13 +27,12 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { path: "/setup",           label: "Project Setup",       icon: Settings,   completionKey: "setup" },
-  { path: "/upload",          label: "Data Collection",     icon: Upload,     completionKey: "upload" },
-  { path: "/activities",      label: "Activity Review",     icon: Activity,   completionKey: "activities" },
-  { path: "/mapping",         label: "Mapping & Factors",   icon: GitMerge,   completionKey: "mapping" },
-  { path: "/benchmarking",    label: "Benchmarking",        icon: BarChart2,  completionKey: "benchmarking" },
-  { path: "/report",          label: "Carbon Report",       icon: FileText,   completionKey: "report" },
-  { path: "/recommendations", label: "Reduction Strategies",icon: Lightbulb,  completionKey: "recommendations" },
+  { path: "/setup",           label: "Scope Definition",          icon: Settings,  completionKey: "setup" },
+  { path: "/upload",          label: "Data Collection",           icon: Upload,    completionKey: "upload" },
+  { path: "/emissions",       label: "Emissions & Mapping",       icon: Zap,       completionKey: "mapping" },
+  { path: "/benchmarking",    label: "Industry Benchmarking",     icon: BarChart2, completionKey: "benchmarking" },
+  { path: "/report",          label: "Carbon Audit Final Report", icon: FileText,  completionKey: "report" },
+  { path: "/recommendations", label: "Reduction Strategies",      icon: Lightbulb, completionKey: "recommendations" },
 ];
 
 export default function DashboardLayout() {

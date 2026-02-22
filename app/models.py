@@ -71,6 +71,9 @@ class ExtractedActivity(StrictModel):
     currency: str | None = None
     sourceDocumentId: str | None = None
     note: str | None = None
+    category: str | None = None
+    phase: Literal["embodied", "operational"] | None = None
+    phaseReason: str | None = None
 
 
 class MatchedFactor(StrictModel):

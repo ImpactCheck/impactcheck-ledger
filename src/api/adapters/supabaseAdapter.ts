@@ -109,6 +109,24 @@ export function createSupabaseAdapter(): ImpactcheckClient {
       return (data || []).map(mapDocument);
     },
 
+    async deleteDocument(projectId, documentId) {
+      const { data: doc } = await supabase
+        .from("documents")
+        .select("storage_path")
+        .eq("id", documentId)
+        .maybeSingle();
+
+      if (doc?.storage_path) {
+        await supabase.storage.from("documents").remove([doc.storage_path]);
+      }
+
+      const { error } = await supabase
+        .from("documents")
+        .delete()
+        .eq("id", documentId);
+      if (error) throw error;
+    },
+
     // ─── Extract ───────────────────────────────────────────
     async startExtract(projectId) {
       return invokeFunction("extract", { projectId });
@@ -290,6 +308,7 @@ function mapDocument(d: any): Document {
     fileType: d.file_type,
     status: d.status,
     uploadedAt: d.uploaded_at,
+    storagePath: d.storage_path ?? undefined,
   };
 }
 
@@ -320,6 +339,8 @@ function mapActivity(d: any): ExtractedActivity {
     sourceDocumentId: d.source_document_id,
     note: d.note,
     category: d.category ?? undefined,
+    phase: d.phase ?? undefined,
+    phaseReason: d.phase_reason ?? undefined,
   };
 }
 

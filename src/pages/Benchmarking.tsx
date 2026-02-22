@@ -104,7 +104,7 @@ export default function Benchmarking() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in-up">
       <div>
-        <p className="step-number mb-1">Step 05</p>
+        <p className="step-number mb-1">Step 04</p>
         <h1 className="text-2xl font-bold tracking-tight">Benchmarking</h1>
         <p className="text-muted-foreground text-sm mt-0.5">
           Compare your carbon intensity against industry peers and track your trajectory.
@@ -189,7 +189,7 @@ export default function Benchmarking() {
 
           {/* Navigation */}
           <div className="flex justify-between">
-            <Button variant="outline" onClick={() => navigate("/mapping")} className="gap-2 rounded-xl">
+            <Button variant="outline" onClick={() => navigate("/emissions")} className="gap-2 rounded-xl">
               <ArrowLeft className="h-4 w-4" /> Back
             </Button>
             <Button onClick={() => navigate("/report")} className="gap-2 rounded-xl">
