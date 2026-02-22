@@ -92,7 +92,10 @@ export default function Landing() {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
 
-  const goToDemo = () => navigate("/app");
+  const goToDemo = () => {
+    sessionStorage.setItem("demoMode", "1");
+    navigate("/app");
+  };
   const goToAuth = () => navigate("/auth");
 
   const handleCheckout = async (tier: SubscriptionTier) => {
