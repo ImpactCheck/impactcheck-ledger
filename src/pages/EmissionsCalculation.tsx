@@ -567,7 +567,7 @@ export default function EmissionsCalculation() {
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Zap className="h-4 w-4 text-primary" />
-                AI Calculation Pipeline
+                AI Calculation Agent
               </CardTitle>
               <CardDescription>
                 {bothDone
