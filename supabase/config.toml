@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.simulate-regions]
 verify_jwt = false
+
+[functions.compliance]
+verify_jwt = false

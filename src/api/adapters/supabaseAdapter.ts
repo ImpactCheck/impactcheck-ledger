@@ -317,7 +317,7 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         return { text: act?.text ?? e.activityId, co2eKg: e.co2eKg, phase: getActivityPhase(act?.category) };
       });
 
-      const complianceByRegion = await invokeCompliance(projectId);
+      // Compliance is loaded asynchronously from Report.tsx — not blocking report render
 
       return {
         projectId,
@@ -342,7 +342,7 @@ export function createSupabaseAdapter(): ImpactcheckClient {
                 ? ["Subject to EU Taxonomy disclosure requirements"]
                 : ["Below CSRD mandatory threshold"],
           },
-          byRegion: complianceByRegion.byRegion,
+          byRegion: {},
         },
         hotspots,
       };
