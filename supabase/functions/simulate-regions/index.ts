@@ -112,7 +112,8 @@ async function runSimulation(
         processed++;
         const progress = 10 + Math.floor((processed / total) * 80);
         const searchQuery = act.search_query || act.text;
-        const region = act.region ? mapRegionToClimatiq(act.region) : climatiqRegion;
+        // Always use the comparison region for simulation, not the activity's home region
+        const region = climatiqRegion;
         const currentStage = processed < total / 2 ? "searching_factors" : "estimating";
 
         await supabase.from("jobs").update({
