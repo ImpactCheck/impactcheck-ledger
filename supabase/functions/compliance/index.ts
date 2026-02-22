@@ -236,8 +236,26 @@ serve(async (req) => {
         const geminiData = await geminiResp.json();
         let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
         rawText = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+        // Extract the outermost JSON object robustly
+        let parsed: Record<string, unknown> = {};
         const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+        if (jsonMatch) {
+          let jsonStr = jsonMatch[0];
+          // Try parsing; if it fails, attempt to fix common LLM issues
+          try {
+            parsed = JSON.parse(jsonStr);
+          } catch {
+            // Fix trailing commas before } or ]
+            jsonStr = jsonStr.replace(/,\s*([}\]])/g, "$1");
+            // Fix unescaped newlines inside string values
+            jsonStr = jsonStr.replace(/(?<=:\s*"[^"]*)\n(?=[^"]*")/g, "\\n");
+            try {
+              parsed = JSON.parse(jsonStr);
+            } catch (e2) {
+              console.error("Failed to repair JSON:", e2);
+            }
+          }
+        }
 
         byRegion[regionKey] = {
           ...parsed,
