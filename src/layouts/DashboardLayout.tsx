@@ -70,7 +70,7 @@ export default function DashboardLayout() {
 
           {/* Back to dashboard */}
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/app")}
             className="w-full flex items-center gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all mb-4 cursor-pointer"
           >
             <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-muted text-muted-foreground">
@@ -210,10 +210,10 @@ export default function DashboardLayout() {
           <div className="flex items-center justify-around px-1 py-1.5">
             {/* Dashboard home */}
             <button
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/app")}
               className={cn(
                 "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors cursor-pointer",
-                location.pathname === "/"
+                location.pathname === "/app"
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
               )}
