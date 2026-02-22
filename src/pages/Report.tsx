@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Eye, EyeOff, ChevronDown, ChevronRight, Lock } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Eye, EyeOff, ChevronDown, ChevronRight, Lock, FileDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { api } from "@/api";
@@ -7,6 +7,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { TIERS } from "@/lib/subscription-tiers";
 import type { Report as ReportType, Recommendation } from "@/contracts/impactcheck.v2";
+import { generateReportPDF } from "@/lib/generate-report-pdf";
 import { AuditCertificate } from "@/components/AuditCertificate";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -218,13 +219,23 @@ export default function Report() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.print()}
+            onClick={() => {
+              if (!report) return;
+              generateReportPDF({
+                report,
+                projectName: project.projectName,
+                year: project.year,
+                primaryRegion,
+                companyType: project.useCase,
+                recommendations,
+              });
+            }}
             className="gap-1.5 rounded-xl"
             disabled={!canExportPdf}
             title={!canExportPdf ? "PDF export requires a paid plan" : undefined}
           >
             {!canExportPdf && <Lock className="h-3 w-3" />}
-            <Printer className="h-3.5 w-3.5" /> Print / Export
+            <FileDown className="h-3.5 w-3.5" /> Export PDF Report
           </Button>
           <AuditCertificate report={report} projectName={project.projectName} primaryRegion={primaryRegion} />
         </div>
