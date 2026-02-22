@@ -23,12 +23,12 @@ export function RegionMapSection({ totalsByRegion, hero }: Props) {
     }));
 
   return (
-    <Card className={`card-elevated border-0 overflow-hidden ${hero ? "ring-1 ring-primary/20" : ""}`}>
+    <Card className={`card-elevated border-0 overflow-hidden h-full flex flex-col ${hero ? "ring-1 ring-primary/20" : ""}`}>
       <CardHeader>
         <CardTitle className={hero ? "text-xl" : "text-lg"}>Emissions by Region</CardTitle>
         <CardDescription>Geographic distribution of CO₂e</CardDescription>
       </CardHeader>
-      <CardContent className="p-0 pb-4">
+      <CardContent className="px-4 pb-4">
         <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: "#18181b" }}>
           <ComposableMap
             projection="geoMercator"
