@@ -30,9 +30,19 @@ async function invokeFunction(name: string, body: Record<string, unknown>) {
   return resp.json();
 }
 
-async function invokeCompliance(projectId: string): Promise<{ byRegion: Record<string, RegionComplianceByPeriod> }> {
+async function getComplianceFromDb(projectId: string): Promise<Record<string, RegionComplianceByPeriod> | null> {
+  const { data, error } = await supabase
+    .from("compliance_evaluations")
+    .select("by_region")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (error || !data?.by_region || Object.keys(data.by_region as object).length === 0) return null;
+  return data.by_region as Record<string, RegionComplianceByPeriod>;
+}
+
+async function invokeCompliance(projectId: string, forceRefresh?: boolean): Promise<{ byRegion: Record<string, RegionComplianceByPeriod> }> {
   try {
-    const { byRegion } = await invokeFunction("compliance", { projectId });
+    const { byRegion } = await invokeFunction("compliance", { projectId, forceRefresh });
     return { byRegion: byRegion || {} };
   } catch {
     return { byRegion: {} };
@@ -384,8 +394,13 @@ export function createSupabaseAdapter(): ImpactcheckClient {
       });
     },
 
-    async getCompliance(projectId) {
-      return invokeCompliance(projectId);
+    async getCompliance(projectId, options) {
+      const forceRefresh = options?.forceRefresh ?? false;
+      if (!forceRefresh) {
+        const cached = await getComplianceFromDb(projectId);
+        if (cached) return { byRegion: cached };
+      }
+      return invokeCompliance(projectId, forceRefresh);
     },
 
   };

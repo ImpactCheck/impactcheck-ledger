@@ -45,6 +45,7 @@ export default function Report() {
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [collapsedOverrides, setCollapsedOverrides] = useState<Record<string, boolean>>({});
+  const [complianceRefreshing, setComplianceRefreshing] = useState(false);
 
   const loadReport = useCallback(() => {
     if (!projectId) return;
@@ -55,7 +56,7 @@ export default function Report() {
       .then((r) => {
         setReport(r);
         setLoading(false);
-        // Load compliance in background (slow Gemini calls)
+        // Load compliance in background (from DB if cached, else Gemini)
         api.getCompliance(projectId)
           .then((c) => {
             setReport(prev => prev ? {
@@ -72,6 +73,20 @@ export default function Report() {
         setLoading(false);
       });
   }, [projectId]);
+
+  const refreshCompliance = useCallback(() => {
+    if (!projectId || !report) return;
+    setComplianceRefreshing(true);
+    api.getCompliance(projectId, { forceRefresh: true })
+      .then((c) => {
+        setReport(prev => prev ? {
+          ...prev,
+          compliance: { ...prev.compliance, byRegion: c.byRegion }
+        } as ReportType : prev);
+      })
+      .catch(() => {})
+      .finally(() => setComplianceRefreshing(false));
+  }, [projectId, report]);
 
   // On mount: load report directly (simulations are triggered from Benchmarking step)
   useEffect(() => {
@@ -125,7 +140,7 @@ export default function Report() {
         case "scenarios":
           return <ScenariosSection recommendations={recommendations} limit={layout.limits.scenarios} hero={isHero} />;
         case "compliance":
-          return <ComplianceSection report={report} hero={isHero} />;
+          return <ComplianceSection report={report} hero={isHero} onRefresh={refreshCompliance} refreshing={complianceRefreshing} />;
         case "missing-data":
           return <MissingDataSection report={report} hero={isHero} />;
         case "region-comparison":

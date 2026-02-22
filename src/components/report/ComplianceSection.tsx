@@ -7,12 +7,15 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight, AlertCircle, Calendar, CalendarClock, MapPin, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, AlertCircle, Calendar, CalendarClock, MapPin, Loader2, RefreshCw } from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   report: Report;
   hero?: boolean;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
 function jurisdictionStatus(j: JurisdictionCompliance | undefined): "green" | "yellow" | "red" {
@@ -214,7 +217,7 @@ function RegionComplianceCard({
   );
 }
 
-export function ComplianceSection({ report, hero }: Props) {
+export function ComplianceSection({ report, hero, onRefresh, refreshing }: Props) {
   const byRegion = report.compliance.byRegion || {};
   const hasByRegion = Object.keys(byRegion).length > 0;
 
@@ -223,13 +226,29 @@ export function ComplianceSection({ report, hero }: Props) {
       className={`card-elevated border-0 print:border print:shadow-none ${hero ? "ring-1 ring-primary/20" : ""}`}
     >
       <CardHeader>
-        <CardTitle className={hero ? "text-xl" : "text-lg"}>
-          Regulatory Compliance
-        </CardTitle>
-        <CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className={hero ? "text-xl" : "text-lg"}>
+              Regulatory Compliance
+            </CardTitle>
+            <CardDescription>
           Compliance assessed for all locations across Year 1 (includes embodied emissions) and Following Years (operational only).
           It is possible to be non-compliant in Year 1 but compliant in subsequent years due to one-time construction/hardware emissions.
         </CardDescription>
+          </div>
+          {onRefresh && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className="shrink-0 print:hidden"
+              title="Re-run compliance evaluation (e.g. after updating activities)"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {hasByRegion ? (

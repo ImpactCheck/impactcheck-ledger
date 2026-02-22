@@ -249,16 +249,30 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { projectId } = await req.json();
+    const { projectId, forceRefresh } = await req.json();
     if (!projectId) throw new Error("projectId required");
-
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Return cached evaluation if available and not forcing refresh
+    if (!forceRefresh) {
+      const { data: cached } = await supabase
+        .from("compliance_evaluations")
+        .select("by_region")
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (cached?.by_region && Object.keys(cached.by_region as object).length > 0) {
+        return new Response(JSON.stringify({ byRegion: cached.by_region }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
 
     const { data: project } = await supabase
       .from("projects")
@@ -343,6 +357,18 @@ serve(async (req) => {
     });
 
     await Promise.all(regionPromises);
+
+    // Persist evaluation for the project
+    await supabase
+      .from("compliance_evaluations")
+      .upsert(
+        {
+          project_id: projectId,
+          by_region: byRegion,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "project_id" }
+      );
 
     return new Response(JSON.stringify({ byRegion }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
