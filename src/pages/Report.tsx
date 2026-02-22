@@ -1,211 +1,45 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Building2, Zap, Leaf, TrendingDown } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
-import type { Report as ReportType } from "@/contracts/impactcheck.v2";
-import { formatTonnes, getActivityPhase } from "@/contracts/impactcheck.v2";
+import type { Report as ReportType, Recommendation } from "@/contracts/impactcheck.v2";
 import { AuditCertificate } from "@/components/AuditCertificate";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  PieChart, Pie, Label,
-} from "recharts";
-import {
-  ComposableMap, Geographies, Geography, Marker,
-} from "react-simple-maps";
-import { cn } from "@/lib/utils";
+  getReportLayout,
+  SECTION_LABELS,
+  USE_CASE_LABELS,
+  type ReportSectionId,
+  type SectionLayout,
+} from "@/lib/report-presentation";
 
-const EMBODIED_COLOR = "hsl(30 80% 55%)";
-const OPERATIONAL_COLOR = "hsl(200 70% 50%)";
-
-const CATEGORY_COLORS: Record<string, string> = {};
-function getCategoryColor(category: string): string {
-  const phase = getActivityPhase(category);
-  if (!CATEGORY_COLORS[category]) {
-    const embodiedPalette = ["hsl(30 80% 55%)", "hsl(35 75% 50%)", "hsl(25 70% 45%)", "hsl(40 65% 60%)"];
-    const operationalPalette = ["hsl(200 70% 50%)", "hsl(210 65% 55%)", "hsl(190 60% 45%)", "hsl(180 55% 50%)", "hsl(220 60% 55%)"];
-    const palette = phase === "embodied" ? embodiedPalette : operationalPalette;
-    const existing = Object.keys(CATEGORY_COLORS).filter((k) => getActivityPhase(k) === phase).length;
-    CATEGORY_COLORS[category] = palette[existing % palette.length];
-  }
-  return CATEGORY_COLORS[category];
-}
-
-const RENEWABLE_MIX: Record<string, number> = {
-  norway_hydro: 94,
-  iceland_geo:  97,
-  iowa_miso:    42,
-  virginia_pjm: 35,
-  texas_ercot:  28,
-  singapore:    4,
-};
-
-const REGION_LABELS: Record<string, string> = {
-  texas_ercot:  "Texas (ERCOT)",
-  norway_hydro: "Norway (Hydro)",
-  virginia_pjm: "Virginia (PJM)",
-  iowa_miso:    "Iowa (MISO)",
-  iceland_geo:  "Iceland (Geo)",
-  singapore:    "Singapore",
-};
-
-// Coordinates for world map markers
-const REGION_COORDS: Record<string, [number, number]> = {
-  texas_ercot:  [-97, 31],
-  virginia_pjm: [-77, 38],
-  iowa_miso:    [-93, 42],
-  norway_hydro: [10, 60],
-  iceland_geo:  [-22, 65],
-  singapore:    [103, 1],
-};
-
-const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
-
-function ComplianceStatusCard({
-  label, status, reasons,
-}: {
-  label: string;
-  status: "green" | "yellow" | "red" | "PENDING";
-  reasons: string[];
-}) {
-  const isReady = status === "green";
-  const isAction = status === "yellow" || status === "red";
-  const displayLabel = isReady ? "READY" : isAction ? "ACTION NEEDED" : "PENDING";
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-semibold">{label}</span>
-        <span
-          className={cn(
-            "text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full border font-mono",
-            isReady && "text-primary bg-primary/10 border-primary/25",
-            isAction && "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-900/20 dark:border-amber-800",
-            !isReady && !isAction && "text-muted-foreground bg-muted border-border"
-          )}
-        >
-          {displayLabel}
-        </span>
-      </div>
-      <ul className="text-xs text-muted-foreground space-y-1.5">
-        {reasons.map((r, i) => <li key={i}>• {r}</li>)}
-      </ul>
-    </div>
-  );
-}
-
-// Ring/Donut chart for embodied vs operational split
-function PhaseRingChart({ embodied, operational }: { embodied: number; operational: number }) {
-  const total = embodied + operational;
-  if (total === 0) return null;
-  const opPct = Math.round((operational / total) * 100);
-  const embPct = 100 - opPct;
-  const largerLabel = opPct >= embPct ? `${opPct}% Operational` : `${embPct}% Embodied`;
-
-  const data = [
-    { name: "Embodied", value: embodied },
-    { name: "Operational", value: operational },
-  ];
-  const colors = [EMBODIED_COLOR, OPERATIONAL_COLOR];
-
-  return (
-    <div className="h-[220px] relative">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            innerRadius={65}
-            outerRadius={95}
-            paddingAngle={2}
-            dataKey="value"
-          >
-            {data.map((_, i) => (
-              <Cell key={i} fill={colors[i]} />
-            ))}
-            <Label
-              value={largerLabel}
-              position="center"
-              style={{ fontSize: 12, fill: "hsl(220 10% 46%)", fontWeight: 600 }}
-            />
-          </Pie>
-          <Tooltip
-            contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-            formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-// World map with pulsing markers
-function RegionWorldMap({ totalsByRegion }: { totalsByRegion: Record<string, number> }) {
-  const maxVal = Math.max(...Object.values(totalsByRegion), 1);
-  const markers = Object.entries(totalsByRegion)
-    .filter(([region]) => REGION_COORDS[region])
-    .map(([region, total]) => ({
-      region,
-      label: REGION_LABELS[region] ?? region,
-      coords: REGION_COORDS[region],
-      total,
-      size: 4 + (total / maxVal) * 14,
-    }));
-
-  return (
-    <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: "#18181b" }}>
-      <ComposableMap
-        projection="geoMercator"
-        projectionConfig={{ scale: 110, center: [10, 20] }}
-        style={{ width: "100%", height: "auto" }}
-      >
-        <Geographies geography={GEO_URL}>
-          {({ geographies }) =>
-            geographies.map((geo) => (
-              <Geography
-                key={geo.rsmKey}
-                geography={geo}
-                fill="#27272a"
-                stroke="#3f3f46"
-                strokeWidth={0.5}
-                style={{ default: { outline: "none" }, hover: { outline: "none" }, pressed: { outline: "none" } }}
-              />
-            ))
-          }
-        </Geographies>
-
-        {markers.map(({ region, coords, size, label, total }) => (
-          <Marker key={region} coordinates={coords}>
-            {/* Outer pulse ring */}
-            <circle r={size * 1.8} fill="hsl(var(--primary))" fillOpacity={0.15} />
-            {/* Inner dot */}
-            <circle r={size} fill="hsl(var(--primary))" fillOpacity={0.9} />
-            <title>{label}: {formatTonnes(total)} t CO₂e</title>
-          </Marker>
-        ))}
-      </ComposableMap>
-      <div className="px-3 pb-2.5 pt-0.5 flex flex-wrap gap-x-3 gap-y-1">
-        {markers.map(({ region, label, total }) => (
-          <div key={region} className="flex items-center gap-1.5 text-[10px] text-zinc-400">
-            <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
-            {label} · {formatTonnes(total)} t
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Section components
+import { ExecutiveSummarySection } from "@/components/report/ExecutiveSummarySection";
+import { PhaseSplitSection } from "@/components/report/PhaseSplitSection";
+import { RegionMapSection } from "@/components/report/RegionMapSection";
+import { HotspotsSection } from "@/components/report/HotspotsSection";
+import { ComplianceSection } from "@/components/report/ComplianceSection";
+import { CategoryBreakdownSection } from "@/components/report/CategoryBreakdownSection";
+import { RegionComparisonSection } from "@/components/report/RegionComparisonSection";
+import { ScenariosSection } from "@/components/report/ScenariosSection";
+import { MissingDataSection } from "@/components/report/MissingDataSection";
+import { DataQualitySection } from "@/components/report/DataQualitySection";
+import { TraceabilitySection } from "@/components/report/TraceabilitySection";
+import { AssumptionsSection } from "@/components/report/AssumptionsSection";
 
 export default function Report() {
   const navigate = useNavigate();
   const { project } = useProject();
   const projectId = project.currentProjectId;
   const [report, setReport] = useState<ReportType | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [collapsedOverrides, setCollapsedOverrides] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!projectId) {
@@ -214,24 +48,97 @@ export default function Report() {
       return;
     }
     setLoading(true);
-    api.getReport(projectId)
-      .then(setReport)
+    Promise.all([
+      api.getReport(projectId),
+      api.generateRecommendations(projectId).catch(() => [] as Recommendation[]),
+    ])
+      .then(([r, recs]) => {
+        setReport(r);
+        setRecommendations(recs);
+      })
       .catch((e) => setError(e.message ?? "Failed to load report"))
       .finally(() => setLoading(false));
   }, [projectId]);
 
-  const phaseTotals = useMemo(() => {
-    if (!report?.categoryBreakdownByRegion) return null;
-    const primaryRegion = Object.keys(report.totalsByRegion)[0] ?? "";
-    const categories = report.categoryBreakdownByRegion[primaryRegion] ?? [];
-    let embodied = 0;
-    let operational = 0;
-    for (const c of categories) {
-      if (getActivityPhase(c.category) === "embodied") embodied += c.co2eKg;
-      else operational += c.co2eKg;
+  const useCase = project.useCase;
+  const hasMultipleRegions = report ? Object.keys(report.totalsByRegion).length > 1 : false;
+  const layout = useMemo(() => getReportLayout(useCase, hasMultipleRegions), [useCase, hasMultipleRegions]);
+
+  const primaryRegion = report ? Object.keys(report.totalsByRegion)[0] ?? "" : "";
+  const categories = report?.categoryBreakdownByRegion?.[primaryRegion] ?? [];
+  const regionCompareData = report
+    ? Object.entries(report.totalsByRegion).map(([region, total]) => ({ region: region.replace(/_/g, " "), total }))
+    : [];
+
+  const isSectionCollapsed = useCallback(
+    (section: SectionLayout) => {
+      if (showAll) return false;
+      if (collapsedOverrides[section.id] !== undefined) return collapsedOverrides[section.id];
+      return section.collapsed ?? false;
+    },
+    [showAll, collapsedOverrides]
+  );
+
+  const toggleSection = (id: ReportSectionId) => {
+    setCollapsedOverrides((prev) => ({ ...prev, [id]: !isSectionCollapsed({ id, collapsed: layout.sections.find(s => s.id === id)?.collapsed }) }));
+  };
+
+  const renderSection = (section: SectionLayout) => {
+    if (!report) return null;
+    const isHero = section.hero ?? false;
+    const collapsed = isSectionCollapsed(section);
+
+    const content = (() => {
+      switch (section.id) {
+        case "executive-summary":
+          return <ExecutiveSummarySection report={report} primaryRegion={primaryRegion} hero={isHero} />;
+        case "phase-split":
+          return <PhaseSplitSection categories={categories} hero={isHero} />;
+        case "region-map":
+          return <RegionMapSection totalsByRegion={report.totalsByRegion} hero={isHero} />;
+        case "hotspots":
+          return <HotspotsSection report={report} limit={layout.limits.hotspots} hero={isHero} />;
+        case "scenarios":
+          return <ScenariosSection recommendations={recommendations} limit={layout.limits.scenarios} hero={isHero} />;
+        case "compliance":
+          return <ComplianceSection report={report} hero={isHero} />;
+        case "missing-data":
+          return <MissingDataSection report={report} hero={isHero} />;
+        case "region-comparison":
+          return <RegionComparisonSection regionData={regionCompareData} hero={isHero} />;
+        case "category-breakdown":
+          return <CategoryBreakdownSection categories={categories} primaryRegion={primaryRegion} hero={isHero} />;
+        case "data-quality":
+          return <DataQualitySection report={report} hero={isHero} />;
+        case "traceability":
+          return <TraceabilitySection report={report} hero={isHero} />;
+        case "assumptions":
+          return <AssumptionsSection hero={isHero} />;
+        default:
+          return null;
+      }
+    })();
+
+    if (!content) return null;
+
+    // Collapsible wrapper
+    if (section.collapsed !== undefined || collapsedOverrides[section.id] !== undefined) {
+      return (
+        <div key={section.id}>
+          <button
+            onClick={() => toggleSection(section.id)}
+            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-2 w-full text-left"
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {SECTION_LABELS[section.id]}
+          </button>
+          {!collapsed && content}
+        </div>
+      );
     }
-    return { embodied, operational };
-  }, [report]);
+
+    return <div key={section.id}>{content}</div>;
+  };
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -261,25 +168,30 @@ export default function Report() {
     </div>
   );
 
-  const primaryRegion = Object.keys(report.totalsByRegion)[0] ?? "";
-  const primaryTotal = report.totalsByRegion[primaryRegion] ?? 0;
-  const categories = report.categoryBreakdownByRegion?.[primaryRegion] ?? [];
-  const renewablePct = RENEWABLE_MIX[primaryRegion] ?? 20;
-  const carbonOffset = parseFloat((primaryTotal / 1000 * 0.49).toFixed(1));
-  const sciScore = categories.length > 0 ? (primaryTotal / 1000 / categories.length).toFixed(2) : "—";
-  const topHotspot = report.hotspots?.[0]?.text ?? "compute workloads";
-  const hasMultiRegion = Object.keys(report.totalsByRegion).length > 1;
-
   return (
     <div className="max-w-5xl mx-auto space-y-6 print:space-y-4 print:max-w-none print:p-0 animate-fade-in-up">
       {/* Header */}
       <div className="flex items-center justify-between print:hidden">
         <div>
-          <p className="step-number mb-1">Step 05</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="step-number">Step 05</p>
+            <Badge variant="outline" className="text-[10px] rounded-full font-mono">
+              {USE_CASE_LABELS[useCase]} view
+            </Badge>
+          </div>
           <h1 className="text-2xl font-bold tracking-tight">Carbon Audit Final Report</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Full lifecycle carbon assessment.</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Full lifecycle carbon assessment per GHG Protocol.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAll((v) => !v)}
+            className="gap-1.5 rounded-xl"
+          >
+            {showAll ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {showAll ? "Use case layout" : "Show all sections"}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5 rounded-xl">
             <Printer className="h-3.5 w-3.5" /> Print / Export
           </Button>
@@ -290,246 +202,11 @@ export default function Report() {
       {/* Print-only header */}
       <div className="hidden print:block">
         <h1 className="text-xl font-bold">ImpactCheck — Carbon Audit Final Report</h1>
-        <p className="text-sm">{project.projectName} · {project.year} · {primaryRegion.replace(/_/g, " ")}</p>
+        <p className="text-sm">{project.projectName} · {project.year} · {primaryRegion.replace(/_/g, " ")} · {USE_CASE_LABELS[useCase]} view</p>
       </div>
 
-      {/* ── 4 KPI metric cards ──────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 print:hidden">
-        <MetricCard
-          label="Total Lifecycle Carbon"
-          value={`${formatTonnes(primaryTotal)} t`}
-          sub="CO₂e lifecycle"
-          icon={<Leaf className="h-4 w-4" />}
-          accent
-        />
-        <MetricCard
-          label="SCI Score"
-          value={typeof sciScore === "string" ? sciScore : `${sciScore} t`}
-          sub="t CO₂e per category"
-          icon={<TrendingDown className="h-4 w-4" />}
-        />
-        <MetricCard
-          label="Renewable Mix"
-          value={`${renewablePct}%`}
-          sub={REGION_LABELS[primaryRegion] ?? primaryRegion}
-          icon={<Zap className="h-4 w-4" />}
-        />
-        <MetricCard
-          label="Carbon Offset"
-          value={`${carbonOffset} t`}
-          sub="50% offset estimate"
-          icon={<Building2 className="h-4 w-4" />}
-        />
-      </div>
-
-      {/* Hero total */}
-      <Card className="card-elevated border-0 overflow-hidden print:border print:shadow-none">
-        <div className="bg-gradient-green p-6 text-primary-foreground">
-          <p className="text-xs uppercase tracking-wider opacity-80">
-            Total Lifecycle Carbon — {REGION_LABELS[primaryRegion] ?? primaryRegion.replace(/_/g, " ")}
-          </p>
-          <p className="text-4xl font-bold font-mono mt-2">
-            {formatTonnes(primaryTotal)} <span className="text-lg font-normal opacity-70">tonnes CO₂e</span>
-          </p>
-          {report.deltaVsBaselineKg !== undefined && (
-            <p className="text-sm mt-1.5 opacity-80">
-              {report.deltaVsBaselineKg > 0 ? "+" : ""}{formatTonnes(report.deltaVsBaselineKg)} t vs. baseline
-            </p>
-          )}
-        </div>
-      </Card>
-
-      {/* AI Insight box */}
-      <div className="rounded-2xl bg-primary/8 border border-primary/20 px-5 py-4 flex items-start gap-3 print:hidden">
-        <div className="h-7 w-7 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
-          <span className="text-[10px] font-bold text-primary font-mono">AI</span>
-        </div>
-        <div>
-          <p className="text-xs font-bold text-primary uppercase tracking-wide mb-1">AI Insight</p>
-          <p className="text-sm text-foreground">
-            Migrating <span className="font-semibold">{topHotspot}</span> to a renewable energy region could reduce total carbon by up to{" "}
-            <span className="font-semibold text-primary">15%</span>.
-          </p>
-        </div>
-      </div>
-
-      {/* ── 2-column section: charts + map ─────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left 60%: ring chart + category bars */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Embodied vs Operational ring chart */}
-          {phaseTotals && (
-            <Card className="card-elevated border-0 print:border print:shadow-none">
-              <CardHeader>
-                <CardTitle className="text-lg">Embodied vs Operational Split</CardTitle>
-                <CardDescription>Breakdown of lifecycle carbon by emission phase</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <PhaseRingChart embodied={phaseTotals.embodied} operational={phaseTotals.operational} />
-                <div className="flex items-center gap-4 mt-2 justify-center text-[11px] text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: EMBODIED_COLOR }} />
-                    Embodied: {formatTonnes(phaseTotals.embodied)} t
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: OPERATIONAL_COLOR }} />
-                    Operational: {formatTonnes(phaseTotals.operational)} t
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Category breakdown bar chart */}
-          {categories.length > 0 && (
-            <Card className="card-elevated border-0 print:border print:shadow-none">
-              <CardHeader>
-                <CardTitle className="text-lg">Category Breakdown</CardTitle>
-                <CardDescription>Emissions by category for {REGION_LABELS[primaryRegion] ?? primaryRegion.replace(/_/g, " ")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={categories} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="category" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatTonnes(v)} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-                        formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
-                      />
-                      <Bar dataKey="co2eKg" radius={[6, 6, 0, 0]}>
-                        {categories.map((c, i) => <Cell key={i} fill={getCategoryColor(c.category)} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Top Hotspots */}
-          <Card className="card-elevated border-0 print:border print:shadow-none">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-warning" />
-                Top Hotspots
-              </CardTitle>
-              <CardDescription>Highest-emission activities requiring attention.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {report.hotspots.slice(0, 8).map((h, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3 text-sm hover:bg-muted/60 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground font-mono w-5">{i + 1}.</span>
-                      <span className="font-medium">{h.text}</span>
-                      {h.phase && (
-                        <Badge
-                          className={`text-[10px] rounded-full ${
-                            h.phase === "embodied"
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800"
-                              : "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 border-sky-200 dark:border-sky-800"
-                          }`}
-                        >
-                          {h.phase === "embodied" ? "Embodied" : "Operational"}
-                        </Badge>
-                      )}
-                    </div>
-                    <span className="font-mono font-bold text-primary">{formatTonnes(h.co2eKg)} t</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right 40%: world map + compliance */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* World Map */}
-          <Card className="card-elevated border-0 overflow-hidden">
-            <CardHeader>
-              <CardTitle className="text-lg">Emissions by Region</CardTitle>
-              <CardDescription>Geographic distribution of CO₂e</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0 pb-4">
-              <RegionWorldMap totalsByRegion={report.totalsByRegion} />
-            </CardContent>
-          </Card>
-
-          {/* Compliance Status */}
-          <Card className="card-elevated border-0 print:border print:shadow-none">
-            <CardHeader>
-              <CardTitle className="text-lg">Regulatory Compliance</CardTitle>
-              <CardDescription>Assessment status by framework.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <ComplianceStatusCard
-                label="EU CSRD"
-                status={report.compliance.eu.status}
-                reasons={report.compliance.eu.reasons}
-              />
-              <ComplianceStatusCard
-                label="US SEC Climate"
-                status={report.compliance.us.status}
-                reasons={report.compliance.us.reasons}
-              />
-              <ComplianceStatusCard
-                label="ISO 14064"
-                status={"PENDING" as "green" | "yellow" | "red" | "PENDING"}
-                reasons={["Verification audit not yet scheduled", "Data collection in progress"]}
-              />
-            </CardContent>
-          </Card>
-
-          {/* AI Recommendation callout */}
-          <div className="rounded-2xl bg-primary/8 border border-primary/20 p-4">
-            <div className="flex items-start gap-2">
-              <Leaf className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-              <div>
-                <p className="text-xs font-bold text-primary uppercase tracking-wide mb-1">AI Recommendation</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {renewablePct >= 80
-                    ? "Excellent renewable mix. Focus on embodied carbon reduction through supplier engagement."
-                    : renewablePct >= 40
-                      ? "Consider renewable PPAs to increase clean energy share."
-                      : `Migrating to a high-renewable region (e.g. Norway or Iceland) could cut operational carbon by up to 85%.`
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Region comparison (if multi-region) */}
-      {hasMultiRegion && (
-        <Card className="card-elevated border-0 print:border print:shadow-none">
-          <CardHeader>
-            <CardTitle className="text-lg">Region Comparison</CardTitle>
-            <CardDescription>Total CO₂e by region</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={Object.entries(report.totalsByRegion).map(([region, total]) => ({ region: region.replace(/_/g, " "), total }))}
-                  margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="region" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatTonnes(v)} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-                    formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
-                  />
-                  <Bar dataKey="total" radius={[6, 6, 0, 0]} fill="hsl(var(--primary))" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Dynamic sections */}
+      {layout.sections.map(renderSection)}
 
       {/* Navigation */}
       <div className="flex justify-between print:hidden">
@@ -540,42 +217,6 @@ export default function Report() {
           Continue <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
-    </div>
-  );
-}
-
-function MetricCard({
-  label, value, sub, icon, accent,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  icon: React.ReactNode;
-  accent?: boolean;
-}) {
-  return (
-    <div className={cn(
-      "rounded-2xl p-4 border",
-      accent
-        ? "bg-primary text-primary-foreground border-primary"
-        : "bg-card border-border"
-    )}>
-      <div className="flex items-center justify-between mb-3">
-        <p className={cn(
-          "text-[10px] font-semibold uppercase tracking-widest",
-          accent ? "opacity-75" : "text-muted-foreground"
-        )}>
-          {label}
-        </p>
-        <div className={cn(
-          "h-7 w-7 rounded-lg flex items-center justify-center",
-          accent ? "bg-primary-foreground/15" : "bg-primary/10 text-primary"
-        )}>
-          {icon}
-        </div>
-      </div>
-      <p className={cn("text-2xl font-bold font-mono", accent ? "" : "text-foreground")}>{value}</p>
-      <p className={cn("text-[11px] mt-0.5", accent ? "opacity-70" : "text-muted-foreground")}>{sub}</p>
     </div>
   );
 }
