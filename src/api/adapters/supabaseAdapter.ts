@@ -231,7 +231,10 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         .select("*")
         .eq("project_id", projectId);
       if (error) throw error;
-      return (data || []).map(mapEstimate);
+      return (data || []).map((d) => ({
+        ...mapEstimate(d),
+        region: d.simulation_region ?? d.region,
+      }));
     },
 
     // ─── Report ────────────────────────────────────────────

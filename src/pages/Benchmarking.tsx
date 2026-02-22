@@ -2,16 +2,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Loader2, Zap, Leaf, Wind, TrendingDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
-import type { Report as ReportType, ActivityEstimate } from "@/contracts/impactcheck.v2";
-import { formatTonnes } from "@/contracts/impactcheck.v2";
+import type { ActivityEstimate, ExtractedActivity } from "@/contracts/impactcheck.v2";
+import { formatTonnes, getActivityPhase } from "@/contracts/impactcheck.v2";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend,
 } from "recharts";
 import { REGION_LABELS } from "@/lib/regions";
+import { useJobPoller } from "@/hooks/useJobPoller";
+import JobProgressCard from "@/components/JobProgressCard";
 
 /* ── Region-derived renewable mix ─────────────────────────────────────── */
 const RENEWABLE_MIX: Record<string, number> = {
@@ -28,36 +30,101 @@ const INDUSTRY_BENCHMARKS = [
   { name: "Sovereign AI",      value: 1.20, color: "hsl(230 55% 40%)" },
 ];
 
+const REGION_COLORS: Record<string, string> = {
+  norway: "hsl(152 52% 40%)",
+  iceland: "hsl(200 65% 55%)",
+  eu: "hsl(210 70% 50%)",
+  us: "hsl(230 55% 40%)",
+};
+
 export default function Benchmarking() {
   const navigate = useNavigate();
   const { project } = useProject();
   const projectId = project.currentProjectId;
 
-  const [report, setReport] = useState<ReportType | null>(null);
   const [estimates, setEstimates] = useState<ActivityEstimate[]>([]);
+  const [simEstimates, setSimEstimates] = useState<ActivityEstimate[]>([]);
+  const [activities, setActivities] = useState<ExtractedActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [simNeeded, setSimNeeded] = useState(false);
 
-  useEffect(() => {
-    if (!projectId) { setLoading(false); return; }
-    Promise.all([
-      api.getReport(projectId),
-      api.getEstimates(projectId),
-    ]).then(([rep, ests]) => {
-      setReport(rep);
-      setEstimates(ests);
-    }).finally(() => setLoading(false));
+  const comparisonRegions = project.comparisonRegions ?? [];
+  const hasComparisons = comparisonRegions.length > 0;
+  const primaryRegion = project.primaryRegion || "global";
+
+  /* ── Load simulation estimates after job completes ─────────────────── */
+  const loadSimEstimates = useCallback(async () => {
+    if (!projectId) return;
+    const sims = await api.getSimulationEstimates(projectId);
+    setSimEstimates(sims);
+    setSimNeeded(false);
   }, [projectId]);
 
-  const primaryRegion = useMemo(() => {
-    if (!report) return project.primaryRegion ?? "";
-    return Object.keys(report.totalsByRegion)[0] ?? project.primaryRegion ?? "";
-  }, [report, project.primaryRegion]);
+  const { job: simJob, start: startSim, isRunning: simRunning } = useJobPoller({
+    projectId: projectId ?? undefined,
+    jobType: "simulation",
+    onSuccess: loadSimEstimates,
+  });
 
-  /* Phase totals from report: embodied (Year 1 only) + operational (annual) */
-  const phaseTotals = useMemo(
-    () => report?.phaseTotalsByRegion?.[primaryRegion] ?? { embodied: 0, operational: 0 },
-    [report, primaryRegion]
-  );
+  /* ── Initial data load ─────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!projectId) { setLoading(false); return; }
+
+    Promise.all([
+      api.getEstimates(projectId),
+      api.getActivities(projectId),
+      hasComparisons ? api.getSimulationEstimates(projectId) : Promise.resolve([]),
+    ]).then(([ests, acts, sims]) => {
+      setEstimates(ests);
+      setActivities(acts);
+
+      if (hasComparisons && sims.length === 0 && !simRunning) {
+        // No simulation data yet — trigger simulation
+        setSimNeeded(true);
+        startSim(() => api.startSimulation(projectId));
+      } else {
+        setSimEstimates(sims);
+      }
+    }).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  /* ── Derived metrics ──────────────────────────────────────────────── */
+
+  // Build activity lookup for phase classification
+  const activityMap = useMemo(() => {
+    const map = new Map<string, ExtractedActivity>();
+    for (const a of activities) map.set(a.id, a);
+    return map;
+  }, [activities]);
+
+  // Totals per region
+  const regionTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    // Home estimates
+    for (const e of estimates) {
+      const r = e.region || primaryRegion;
+      totals[r] = (totals[r] ?? 0) + e.co2eKg;
+    }
+    // Simulation estimates
+    for (const e of simEstimates) {
+      const r = e.region || primaryRegion;
+      totals[r] = (totals[r] ?? 0) + e.co2eKg;
+    }
+    return totals;
+  }, [estimates, simEstimates, primaryRegion]);
+
+  // Phase totals for primary region
+  const phaseTotals = useMemo(() => {
+    const result = { embodied: 0, operational: 0 };
+    for (const e of estimates) {
+      const act = activityMap.get(e.activityId);
+      const phase = getActivityPhase(act?.category);
+      result[phase] += e.co2eKg;
+    }
+    return result;
+  }, [estimates, activityMap]);
+
   const firstYearTotalKg = phaseTotals.embodied + phaseTotals.operational;
   const annualTotalKg = phaseTotals.operational;
 
@@ -66,14 +133,10 @@ export default function Benchmarking() {
     ? Math.round((phaseTotals.embodied / firstYearTotalKg) * 100)
     : 0;
 
-  /* Carbon intensity: t CO₂e per activity — Year 1 and Annual */
+  /* Carbon intensity: t CO₂e per activity */
   const activityCount = estimates.length || 1;
-  const year1Intensity = activityCount > 0
-    ? parseFloat((firstYearTotalKg / 1000 / activityCount).toFixed(3))
-    : 0;
-  const annualIntensity = activityCount > 0
-    ? parseFloat((annualTotalKg / 1000 / activityCount).toFixed(3))
-    : 0;
+  const year1Intensity = parseFloat((firstYearTotalKg / 1000 / activityCount).toFixed(3));
+  const annualIntensity = parseFloat((annualTotalKg / 1000 / activityCount).toFixed(3));
 
   const benchmarkData = [
     { name: "Your Project (Year 1)", value: year1Intensity, color: "hsl(var(--primary))" },
@@ -81,7 +144,18 @@ export default function Benchmarking() {
     ...INDUSTRY_BENCHMARKS,
   ];
 
-  /* Multi-year trajectory: Year 1 (embodied+ops) → recurring years (ops only) */
+  /* Region comparison chart data */
+  const regionChartData = useMemo(() => {
+    const allRegions = [primaryRegion, ...comparisonRegions];
+    return allRegions.map((r) => ({
+      region: REGION_LABELS[r] ?? r,
+      total: regionTotals[r] ?? 0,
+      color: r === primaryRegion ? "hsl(var(--primary))" : (REGION_COLORS[r] ?? "hsl(220 60% 45%)"),
+      isHome: r === primaryRegion,
+    }));
+  }, [regionTotals, primaryRegion, comparisonRegions]);
+
+  /* Multi-year trajectory */
   const baselineKg = project.baselineFootprintKgCO2e ?? firstYearTotalKg * 1.15;
   const trajectoryData = [
     { period: "Year 1", actual: firstYearTotalKg / 1000, baseline: baselineKg / 1000 },
@@ -115,9 +189,56 @@ export default function Benchmarking() {
         </p>
       </div>
 
+      {/* ── Simulation progress ──────────────────────────────────── */}
+      {simJob && (simRunning || simNeeded) && (
+        <JobProgressCard job={simJob} type="simulation" />
+      )}
+
       <div className="flex gap-6 items-start">
         {/* ── Charts (left 2/3) ────────────────────────────────── */}
         <div className="flex-1 min-w-0 space-y-6">
+
+          {/* Region Comparison — only when we have comparison regions */}
+          {hasComparisons && regionChartData.length > 1 && !simRunning && (
+            <Card className="card-elevated border-0 ring-1 ring-primary/20">
+              <CardHeader>
+                <CardTitle className="text-lg">Region Comparison</CardTitle>
+                <CardDescription>
+                  Total CO₂e by region — home ({REGION_LABELS[primaryRegion] ?? primaryRegion}) vs comparison regions
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={regionChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="region" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false}
+                        tickFormatter={(v) => `${formatTonnes(v)} t`}
+                      />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
+                        formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
+                      />
+                      <Bar dataKey="total" radius={[6, 6, 0, 0]}>
+                        {regionChartData.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap gap-3 mt-3 text-[11px] text-muted-foreground">
+                  {regionChartData.map((entry) => (
+                    <div key={entry.region} className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: entry.color }} />
+                      {entry.region} {entry.isHome ? "(Home)" : ""}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Carbon Intensity Benchmark */}
           <Card className="card-elevated border-0">
