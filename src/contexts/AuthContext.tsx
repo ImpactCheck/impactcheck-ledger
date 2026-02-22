@@ -17,6 +17,23 @@ interface AuthContextValue extends AuthState {
   checkSubscription: () => Promise<void>;
 }
 
+const DEMO_TIER: SubscriptionTier = "regulator";
+
+function getEffectiveTier(
+  session: Session | null,
+  subscribed: boolean,
+  tier: SubscriptionTier,
+  subscriptionEnd: string | null
+): SubscriptionTier {
+  if (session?.user) {
+    return subscribed ? tier : "free";
+  }
+  if (typeof window !== "undefined" && sessionStorage.getItem("demoMode") === "1") {
+    return DEMO_TIER;
+  }
+  return "free";
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -34,12 +51,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.functions.invoke("check-subscription");
       if (!error && data) {
         const tier = tierFromProductId(data.product_id);
-        setState((prev) => ({
-          ...prev,
-          isPro: data.subscribed ?? false,
-          subscriptionTier: data.subscribed ? tier : "free",
-          subscriptionEnd: data.subscription_end ?? null,
-        }));
+        const subscribed = data.subscribed ?? false;
+        const subscriptionEnd = data.subscription_end ?? null;
+        setState((prev) => {
+          const effectiveTier = getEffectiveTier(prev.session, subscribed, tier, subscriptionEnd);
+          const isDemo = !prev.session?.user && effectiveTier === DEMO_TIER;
+          return {
+            ...prev,
+            isPro: subscribed || isDemo,
+            subscriptionTier: effectiveTier,
+            subscriptionEnd,
+          };
+        });
       }
     } catch {
       // ignore
@@ -48,26 +71,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState((prev) => ({
-        ...prev,
-        user: session?.user ?? null,
-        session,
-        loading: false,
-      }));
+      setState((prev) => {
+        const next = {
+          ...prev,
+          user: session?.user ?? null,
+          session,
+          loading: false,
+        };
+        if (session?.user) {
+          return next;
+        }
+        const isDemo = typeof window !== "undefined" && sessionStorage.getItem("demoMode") === "1";
+        return {
+          ...next,
+          isPro: isDemo,
+          subscriptionTier: isDemo ? DEMO_TIER : "free",
+          subscriptionEnd: null,
+        };
+      });
       if (session?.user) {
         setTimeout(() => checkSubscription(), 0);
-      } else {
-        setState((prev) => ({ ...prev, isPro: false, subscriptionTier: "free", subscriptionEnd: null }));
       }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setState((prev) => ({
-        ...prev,
-        user: session?.user ?? null,
-        session,
-        loading: false,
-      }));
+      setState((prev) => {
+        const next = {
+          ...prev,
+          user: session?.user ?? null,
+          session,
+          loading: false,
+        };
+        if (session?.user) {
+          return next;
+        }
+        const isDemo = typeof window !== "undefined" && sessionStorage.getItem("demoMode") === "1";
+        return {
+          ...next,
+          isPro: isDemo,
+          subscriptionTier: isDemo ? DEMO_TIER : "free",
+          subscriptionEnd: null,
+        };
+      });
       if (session?.user) checkSubscription();
     });
 
