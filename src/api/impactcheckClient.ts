@@ -14,7 +14,7 @@ export interface ImpactcheckClient {
   createProject(params: {
     name: string;
     year: number;
-    companyType: "ai_infra" | "other";
+    companyType: "business" | "investor" | "regulator";
     primaryRegion: string;
     comparisonRegions?: string[];
   }): Promise<Project>;

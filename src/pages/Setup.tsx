@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowRight, Loader2, Sparkles, Building2 } from "lucide-react";
+import { ArrowRight, Loader2, Sparkles, Building2, TrendingUp, Scale } from "lucide-react";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,7 @@ export default function Setup() {
   const { project, updateProject } = useProject();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [companyType, setCompanyType] = useState<"ai_infra" | "other">("other");
+  const [companyType, setCompanyType] = useState<"business" | "investor" | "regulator">("business");
 
   const toggleComparison = (region: string) => {
     const current = project.comparisonRegions;
@@ -97,32 +97,45 @@ export default function Setup() {
 
           <div className="space-y-2">
             <Label>Company Type</Label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => setCompanyType("ai_infra")}
+                onClick={() => setCompanyType("business")}
                 className={cn(
                   "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all border cursor-pointer",
-                  companyType === "ai_infra"
-                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                    : "bg-muted text-muted-foreground border-border hover:border-primary/40"
-                )}
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                AI Infrastructure
-              </button>
-              <button
-                type="button"
-                onClick={() => setCompanyType("other")}
-                className={cn(
-                  "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all border cursor-pointer",
-                  companyType === "other"
+                  companyType === "business"
                     ? "bg-primary text-primary-foreground border-primary shadow-sm"
                     : "bg-muted text-muted-foreground border-border hover:border-primary/40"
                 )}
               >
                 <Building2 className="h-3.5 w-3.5" />
-                Other
+                Business
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompanyType("investor")}
+                className={cn(
+                  "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all border cursor-pointer",
+                  companyType === "investor"
+                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                    : "bg-muted text-muted-foreground border-border hover:border-primary/40"
+                )}
+              >
+                <TrendingUp className="h-3.5 w-3.5" />
+                Investor / VC
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompanyType("regulator")}
+                className={cn(
+                  "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all border cursor-pointer",
+                  companyType === "regulator"
+                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                    : "bg-muted text-muted-foreground border-border hover:border-primary/40"
+                )}
+              >
+                <Scale className="h-3.5 w-3.5" />
+                Regulator
               </button>
             </div>
           </div>
