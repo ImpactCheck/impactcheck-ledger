@@ -11,24 +11,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend,
 } from "recharts";
+import { REGION_LABELS } from "@/lib/regions";
 
 /* ── Region-derived renewable mix ─────────────────────────────────────── */
 const RENEWABLE_MIX: Record<string, number> = {
-  norway_hydro: 94,
-  iceland_geo:  97,
-  iowa_miso:    42,
-  virginia_pjm: 35,
-  texas_ercot:  28,
-  singapore:    4,
-};
-
-const REGION_LABELS: Record<string, string> = {
-  texas_ercot:  "Texas (ERCOT)",
-  norway_hydro: "Norway (Hydro)",
-  virginia_pjm: "Virginia (PJM)",
-  iowa_miso:    "Iowa (MISO)",
-  iceland_geo:  "Iceland (Geo)",
-  singapore:    "Singapore",
+  norway: 94,
+  iceland: 97,
+  eu: 45,
+  us: 28,
 };
 
 /* Static industry baselines (t CO₂e per compute unit — illustrative) */
@@ -216,7 +206,7 @@ export default function Benchmarking() {
             <InsightCard
               icon={<Zap className="h-3.5 w-3.5" />}
               title="Energy Efficiency"
-              value={project.primaryRegion === "norway_hydro" || project.primaryRegion === "iceland_geo" ? "PUE 1.12" : "PUE —"}
+              value={project.primaryRegion === "norway" || project.primaryRegion === "iceland" ? "PUE 1.12" : "PUE —"}
               sub="Power Usage Effectiveness"
               color="text-blue-500"
               bgColor="bg-blue-500/10"

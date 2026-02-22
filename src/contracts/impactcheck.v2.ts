@@ -111,6 +111,22 @@ export interface PhaseTotals {
   operational: number;
 }
 
+/** Per-jurisdiction compliance from the compliance engine (Norway, EU, USA, Iceland) */
+export interface JurisdictionCompliance {
+  evaluation_status: "EVALUATED" | "NOT_EVALUATED";
+  inputs?: Record<string, { status: string; value?: unknown; unit?: string; source?: string }>;
+  checks?: Record<string, { status: "PASS" | "FAIL" | "MISSING"; computed_from?: string[] }>;
+}
+
+/** Per-region compliance result from Gemini compliance engine */
+export interface RegionComplianceResult {
+  primary_jurisdiction: "Norway" | "EU" | "USA" | "Iceland";
+  jurisdictions?: Record<string, JurisdictionCompliance>;
+  totalCo2eKg?: number;
+  totalCo2eTonnes?: number;
+  error?: string;
+}
+
 export interface Report {
   projectId: string;
   totalsByRegion: Record<string, number>;
@@ -123,6 +139,8 @@ export interface Report {
   compliance: {
     us: { status: "green" | "yellow" | "red"; reasons: string[] };
     eu: { status: "green" | "yellow" | "red"; reasons: string[] };
+    /** Per-region compliance from compliance engine (home + comparison regions) */
+    byRegion?: Record<string, RegionComplianceResult>;
   };
   hotspots: { text: string; co2eKg: number; phase?: ActivityPhase }[];
 }

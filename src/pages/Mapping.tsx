@@ -15,14 +15,7 @@ import JobProgressCard from "@/components/JobProgressCard";
 import { useJobPoller } from "@/hooks/useJobPoller";
 import { cn } from "@/lib/utils";
 
-const REGION_LABELS: Record<string, string> = {
-  texas_ercot: "Texas (ERCOT)",
-  norway_hydro: "Norway (Hydro)",
-  virginia_pjm: "Virginia (PJM)",
-  iowa_miso: "Iowa (MISO)",
-  iceland_geo: "Iceland (Geo)",
-  singapore: "Singapore",
-};
+import { REGION_LABELS } from "@/lib/regions";
 
 function ConfidenceDot({ value }: { value: number }) {
   const pct = Math.round(value * 100);

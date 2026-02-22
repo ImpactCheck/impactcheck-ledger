@@ -90,8 +90,8 @@ PROJECT_JSON=$(curl -s -X POST http://localhost:8000/api/projects \
     "name": "Abilene DC Expansion",
     "year": 2026,
     "companyType": "ai_infra",
-    "primaryRegion": "texas_ercot",
-    "comparisonRegions": ["norway_hydro"]
+    "primaryRegion": "us",
+    "comparisonRegions": ["norway"]
   }')
 
 echo "$PROJECT_JSON"

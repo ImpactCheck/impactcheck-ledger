@@ -19,14 +19,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const REGION_LABELS: Record<string, string> = {
-  texas_ercot: "Texas (ERCOT)",
-  norway_hydro: "Norway (Hydro)",
-  virginia_pjm: "Virginia (PJM)",
-  iowa_miso: "Iowa (MISO)",
-  iceland_geo: "Iceland (Geo)",
-  singapore: "Singapore",
-};
+import { REGION_LABELS } from "@/lib/regions";
 
 export default function Dashboard() {
   const navigate = useNavigate();

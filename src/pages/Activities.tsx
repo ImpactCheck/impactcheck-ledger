@@ -26,14 +26,7 @@ const UNIT_TYPES: UnitType[] = [
   "AreaOverTime", "DataOverTime", "DistanceOverTime", "NumberOverTime", "WeightOverTime",
 ];
 
-const REGION_LABELS: Record<string, string> = {
-  texas_ercot: "Texas (ERCOT)",
-  norway_hydro: "Norway (Hydro)",
-  virginia_pjm: "Virginia (PJM)",
-  iowa_miso: "Iowa (MISO)",
-  iceland_geo: "Iceland (Geo)",
-  singapore: "Singapore",
-};
+import { REGION_LABELS } from "@/lib/regions";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Compute: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
@@ -381,15 +374,6 @@ export default function Activities() {
 
 /* ─── Activity Table ─────────────────────────────────────────────────── */
 
-const REGION_LABELS_MAP: Record<string, string> = {
-  texas_ercot: "Texas (ERCOT)",
-  norway_hydro: "Norway (Hydro)",
-  virginia_pjm: "Virginia (PJM)",
-  iowa_miso: "Iowa (MISO)",
-  iceland_geo: "Iceland (Geo)",
-  singapore: "Singapore",
-};
-
 function PhaseBadge({ category }: { category?: string }) {
   const phase = getActivityPhase(category);
   return phase === "embodied" ? (
@@ -456,7 +440,7 @@ function ActivityTable({
                     {act.quantity != null && act.unit ? `${act.quantity.toLocaleString()} ${act.unit}` : "—"}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {act.region ? (REGION_LABELS_MAP[act.region] ?? act.region.replace(/_/g, " ")) : "—"}
+                    {act.region ? (REGION_LABELS[act.region] ?? act.region.replace(/_/g, " ")) : "—"}
                   </TableCell>
                 </TableRow>
                 {expandedId === act.id && (
@@ -504,7 +488,7 @@ function ActivityTable({
                                     <SelectContent>
                                       {allRegions.map((r) => (
                                         <SelectItem key={r} value={r} className="text-xs">
-                                          {REGION_LABELS_MAP[r] ?? r.replace(/_/g, " ")}
+                                          {REGION_LABELS[r] ?? r.replace(/_/g, " ")}
                                         </SelectItem>
                                       ))}
                                     </SelectContent>

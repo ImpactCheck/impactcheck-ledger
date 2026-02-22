@@ -8,6 +8,7 @@ import type {
   ActivityEstimate,
   Report,
   Recommendation,
+  RegionComplianceResult,
 } from "@/contracts/impactcheck.v2";
 import { getActivityPhase } from "@/contracts/impactcheck.v2";
 
@@ -27,6 +28,15 @@ async function invokeFunction(name: string, body: Record<string, unknown>) {
     throw new Error(`${name} failed: ${err}`);
   }
   return resp.json();
+}
+
+async function invokeCompliance(projectId: string): Promise<{ byRegion: Record<string, RegionComplianceResult> }> {
+  try {
+    const { byRegion } = await invokeFunction("compliance", { projectId });
+    return { byRegion: byRegion || {} };
+  } catch {
+    return { byRegion: {} };
+  }
 }
 
 export function createSupabaseAdapter(): ImpactcheckClient {
@@ -272,6 +282,8 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         return { text: act?.text ?? e.activityId, co2eKg: e.co2eKg, phase: getActivityPhase(act?.category) };
       });
 
+      const complianceByRegion = await invokeCompliance(projectId);
+
       return {
         projectId,
         totalsByRegion: totals,
@@ -295,6 +307,7 @@ export function createSupabaseAdapter(): ImpactcheckClient {
                 ? ["Subject to EU Taxonomy disclosure requirements"]
                 : ["Below CSRD mandatory threshold"],
           },
+          byRegion: complianceByRegion.byRegion,
         },
         hotspots,
       };
@@ -311,6 +324,10 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         action: "finalize",
         recommendationIds,
       });
+    },
+
+    async getCompliance(projectId) {
+      return invokeCompliance(projectId);
     },
 
   };

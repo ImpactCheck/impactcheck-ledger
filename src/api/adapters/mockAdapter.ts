@@ -37,12 +37,10 @@ const ACTIVITY_TEMPLATES: { text: string; unit_type: "Weight" | "Energy" | "Mone
 ];
 
 const REGIONS_GRID: Record<string, number> = {
-  texas_ercot: 380,
-  norway_hydro: 10,
-  virginia_pjm: 310,
-  iowa_miso: 420,
-  iceland_geo: 15,
-  singapore: 408,
+  eu: 350,
+  norway: 10,
+  us: 380,
+  iceland: 15,
 };
 
 function determineCo2e(text: string, region: string): number {
@@ -86,8 +84,8 @@ export function createMockAdapter(): ImpactcheckClient {
       name: "Abilene DC Expansion",
       year: 2026,
       companyType: "ai_infra",
-      primaryRegion: "texas_ercot",
-      comparisonRegions: ["norway_hydro"],
+      primaryRegion: "us",
+      comparisonRegions: ["norway"],
       baselineFootprintKgCO2e: 1_200_000,
     },
     {
@@ -95,17 +93,17 @@ export function createMockAdapter(): ImpactcheckClient {
       name: "Oslo Green Campus",
       year: 2026,
       companyType: "other",
-      primaryRegion: "norway_hydro",
+      primaryRegion: "norway",
       comparisonRegions: [],
       baselineFootprintKgCO2e: 450_000,
     },
     {
       id: "prj_3",
-      name: "Singapore Edge Cluster",
+      name: "EU Edge Cluster",
       year: 2025,
       companyType: "ai_infra",
-      primaryRegion: "singapore",
-      comparisonRegions: ["iceland_geo"],
+      primaryRegion: "eu",
+      comparisonRegions: ["iceland"],
       baselineFootprintKgCO2e: 800_000,
     },
   ];
@@ -143,7 +141,7 @@ export function createMockAdapter(): ImpactcheckClient {
       projectId: "prj_1",
       text: t.text,
       unit_type: t.unit_type,
-      region: "texas_ercot",
+      region: "us",
       quantity: t.quantity,
       unit: t.unit,
       sourceDocumentId: `doc_${(i % 3) + 1}`,
@@ -248,6 +246,7 @@ export function createMockAdapter(): ImpactcheckClient {
                 ? ["Subject to EU Taxonomy disclosure requirements"]
                 : ["Below CSRD mandatory threshold"],
         },
+        byRegion: {},
       },
       hotspots,
     };
@@ -336,6 +335,10 @@ export function createMockAdapter(): ImpactcheckClient {
     // Report
     async getReport(projectId) {
       return buildReport(projectId);
+    },
+
+    async getCompliance() {
+      return { byRegion: {} };
     },
 
     // Recommendations

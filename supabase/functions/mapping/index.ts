@@ -76,9 +76,10 @@ async function runMapping(
       return;
     }
 
-    // Get project for region info
-    const { data: proj } = await supabase.from("projects").select("primary_region").eq("id", projectId).single();
-    const projectRegion = mapRegionToClimatiq(proj?.primary_region || "");
+    // Get project for region info (primary + comparison regions for simulation)
+    const { data: proj } = await supabase.from("projects").select("primary_region, comparison_regions").eq("id", projectId).single();
+    const projectRegions = [proj?.primary_region, ...(proj?.comparison_regions || [])].filter(Boolean);
+    const regionsToEstimate = projectRegions.length > 0 ? projectRegions : ["us"];
 
     await supabase.from("jobs").update({ progress: 10, stage: "searching_factors", message: `Searching factors for ${activities.length} activities…` }).eq("id", jobId);
 
@@ -86,128 +87,118 @@ async function runMapping(
     await supabase.from("estimates").delete().eq("project_id", projectId);
 
     const estimates: any[] = [];
-    const total = activities.length;
+    const total = activities.length * regionsToEstimate.length;
     const useStub = !CLIMATIQ_API_KEY;
+    let processed = 0;
 
-    for (let i = 0; i < total; i++) {
-      const act = activities[i];
-      const progress = 10 + Math.floor((i / total) * 75);
-      const searchQuery = act.search_query || act.text;
-      const region = act.region ? mapRegionToClimatiq(act.region) : projectRegion;
-      const currentStage = i < total / 2 ? "searching_factors" : "estimating";
+    for (const regionKey of regionsToEstimate) {
+      const climatiqRegion = mapRegionToClimatiq(regionKey);
 
-      await supabase.from("jobs").update({
-        progress,
-        stage: currentStage,
-        message: `Processing activity ${i + 1} of ${total}…`,
-      }).eq("id", jobId);
+      for (let i = 0; i < activities.length; i++) {
+        const act = activities[i];
+        processed++;
+        const progress = 10 + Math.floor((processed / total) * 75);
+        const searchQuery = act.search_query || act.text;
+        const region = act.region ? mapRegionToClimatiq(act.region) : climatiqRegion;
+        const currentStage = processed < total / 2 ? "searching_factors" : "estimating";
 
-      try {
-        if (useStub) {
-          // ── Deterministic stub mode ──
-          const stubResult = stubEstimate(act, searchQuery);
-          estimates.push({
-            project_id: projectId,
-            activity_id: act.id,
-            region: act.region,
-            matched_factor: stubResult.matched_factor,
-            confidence: stubResult.confidence,
-            co2e_kg: stubResult.co2e_kg,
-            input_used: { unit_type: act.unit_type, quantity: act.quantity, amount: act.amount, currency: act.currency },
-          });
-          continue;
-        }
+        await supabase.from("jobs").update({
+          progress,
+          stage: currentStage,
+          message: `Processing activity ${i + 1}/${activities.length} for region ${regionKey}…`,
+        }).eq("id", jobId);
 
-        // ── Step 1: Search for emission factors ──
-        const searchResult = await searchFactors(CLIMATIQ_API_KEY!, searchQuery, region, act.unit_type);
-
-        if (!searchResult.factor) {
-          console.warn(`No factors found for "${searchQuery}" after all fallbacks`);
-          estimates.push(fallbackEstimate(projectId, act, null, searchResult.confidence));
-          continue;
-        }
-
-        // ── Step 2: Estimate ──
-        if (!act.quantity && !act.amount) {
-          // No quantity — store search result only, flag as needs_quantity
-          estimates.push({
-            project_id: projectId,
-            activity_id: act.id,
-            region: act.region,
-            matched_factor: {
-              id: searchResult.factor.activity_id,
-              name: searchResult.factor.name,
-              source: searchResult.factor.source,
-              year: searchResult.factor.year,
-              unit: toUnitTypeArray(searchResult.factor.unit_type)[0] ?? null,
-            },
-            confidence: searchResult.confidence * 0.5,
-            co2e_kg: 0,
-            input_used: { unit_type: act.unit_type, quantity: null, amount: null, note: "needs_quantity" },
-          });
-          continue;
-        }
-
-        const params = buildParameters(act, searchResult.factor);
-        const estimateResult = await estimateSingle(
-          CLIMATIQ_API_KEY!,
-          searchResult.factor.activity_id,
-          params,
-          region
-        );
-
-        if (estimateResult.error) {
-          // Try multiple recovery strategies
-          let retryResult: EstimateResult | null = null;
-
-          // Strategy 1: adapt parameters based on error's valid_values
-          const validTypes1 = parseValidUnitTypes(estimateResult.error);
-          if (validTypes1.length > 0) {
-            const adapted = adaptParametersToValidTypes(act, validTypes1);
-            if (adapted) {
-              retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, adapted, region);
-              if (retryResult.error) retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, adapted, null);
-              if (!retryResult.error) { estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.7)); continue; }
-            }
+        try {
+          if (useStub) {
+            const stubResult = stubEstimate(act, searchQuery, regionKey);
+            estimates.push({
+              project_id: projectId,
+              activity_id: act.id,
+              region: regionKey,
+              matched_factor: stubResult.matched_factor,
+              confidence: stubResult.confidence,
+              co2e_kg: stubResult.co2e_kg,
+              input_used: { unit_type: act.unit_type, quantity: act.quantity, amount: act.amount, currency: act.currency },
+            });
+            continue;
           }
 
-          // Strategy 2: retry without region (original params)
-          retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, params, null);
-          if (!retryResult.error) { estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.8)); continue; }
+          const searchResult = await searchFactors(CLIMATIQ_API_KEY!, searchQuery, region, act.unit_type);
 
-          // Strategy 3: adapt parameters from strategy 2's error
-          const validTypes2 = parseValidUnitTypes(retryResult.error!);
-          if (validTypes2.length > 0) {
-            const adapted2 = adaptParametersToValidTypes(act, validTypes2);
-            if (adapted2) {
-              retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, adapted2, null);
-              if (!retryResult.error) { estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.6)); continue; }
-            }
+          if (!searchResult.factor) {
+            console.warn(`No factors found for "${searchQuery}" after all fallbacks`);
+            estimates.push(fallbackEstimate(projectId, act, null, searchResult.confidence, regionKey));
+            continue;
           }
 
-          // Strategy 4: LLM-assisted unit conversion
-          const allValidTypes = [...new Set([...validTypes1, ...validTypes2])];
-          if (allValidTypes.length > 0) {
-            const llmParams = await llmConvertUnits(act, allValidTypes);
-            if (llmParams) {
-              retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, llmParams, region);
-              if (retryResult.error) retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, llmParams, null);
-              if (!retryResult.error) {
-                console.log(`LLM conversion succeeded for ${searchResult.factor.activity_id}`);
-                estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.5));
-                continue;
+          if (!act.quantity && !act.amount) {
+            estimates.push({
+              project_id: projectId,
+              activity_id: act.id,
+              region: regionKey,
+              matched_factor: {
+                id: searchResult.factor.activity_id,
+                name: searchResult.factor.name,
+                source: searchResult.factor.source,
+                year: searchResult.factor.year,
+                unit: toUnitTypeArray(searchResult.factor.unit_type)[0] ?? null,
+              },
+              confidence: searchResult.confidence * 0.5,
+              co2e_kg: 0,
+              input_used: { unit_type: act.unit_type, quantity: null, amount: null, note: "needs_quantity" },
+            });
+            continue;
+          }
+
+          const params = buildParameters(act, searchResult.factor);
+          const estimateResult = await estimateSingle(
+            CLIMATIQ_API_KEY!,
+            searchResult.factor.activity_id,
+            params,
+            region
+          );
+
+          if (estimateResult.error) {
+            let retryResult: EstimateResult | null = null;
+            const validTypes1 = parseValidUnitTypes(estimateResult.error);
+            if (validTypes1.length > 0) {
+              const adapted = adaptParametersToValidTypes(act, validTypes1);
+              if (adapted) {
+                retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, adapted, region);
+                if (retryResult.error) retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, adapted, null);
+                if (!retryResult.error) { estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.7, regionKey)); continue; }
               }
             }
+            retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, params, null);
+            if (!retryResult.error) { estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.8, regionKey)); continue; }
+            const validTypes2 = parseValidUnitTypes(retryResult.error!);
+            if (validTypes2.length > 0) {
+              const adapted2 = adaptParametersToValidTypes(act, validTypes2);
+              if (adapted2) {
+                retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, adapted2, null);
+                if (!retryResult.error) { estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.6, regionKey)); continue; }
+              }
+            }
+            const allValidTypes = [...new Set([...validTypes1, ...validTypes2])];
+            if (allValidTypes.length > 0) {
+              const llmParams = await llmConvertUnits(act, allValidTypes);
+              if (llmParams) {
+                retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, llmParams, region);
+                if (retryResult.error) retryResult = await estimateSingle(CLIMATIQ_API_KEY!, searchResult.factor.activity_id, llmParams, null);
+                if (!retryResult.error) {
+                  estimates.push(buildEstimateRow(projectId, act, retryResult, searchResult.factor, searchResult.confidence * 0.5, regionKey));
+                  continue;
+                }
+              }
+            }
+            estimates.push(fallbackEstimate(projectId, act, searchResult.factor, searchResult.confidence * 0.5, regionKey));
+          } else {
+            estimates.push(buildEstimateRow(projectId, act, estimateResult, searchResult.factor, searchResult.confidence, regionKey));
           }
-
-          console.error(`Estimate failed for ${searchResult.factor.activity_id}:`, retryResult?.error || estimateResult.error);
-          estimates.push(fallbackEstimate(projectId, act, searchResult.factor, searchResult.confidence * 0.5));
-        } else {
-          estimates.push(buildEstimateRow(projectId, act, estimateResult, searchResult.factor, searchResult.confidence));
+        } catch (err) {
+          console.error(`Error mapping activity ${act.id}:`, err);
+          estimates.push(fallbackEstimate(projectId, act, null, 0.2, regionKey));
         }
-      } catch (err) {
-        console.error(`Error mapping activity ${act.id}:`, err);
-        estimates.push(fallbackEstimate(projectId, act, null, 0.2));
       }
     }
 
@@ -393,11 +384,11 @@ async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 4): P
 
 // ─── Build estimate row ─────────────────────────────────
 
-function buildEstimateRow(projectId: string, act: any, result: EstimateResult, factor: any, confidence: number) {
+function buildEstimateRow(projectId: string, act: any, result: EstimateResult, factor: any, confidence: number, regionKey?: string) {
   return {
     project_id: projectId,
     activity_id: act.id,
-    region: act.region,
+    region: regionKey ?? act.region,
     matched_factor: {
       id: result.emission_factor?.activity_id || factor.activity_id,
       name: result.emission_factor?.name || factor.name,
@@ -564,7 +555,15 @@ Respond with ONLY the JSON object, no explanation.`;
 
 // ─── Stub mode ──────────────────────────────────────────
 
-function stubEstimate(act: any, searchQuery: string) {
+// Region carbon intensity multipliers for stub mode (relative to US baseline ~380 g/kWh)
+const REGION_STUB_MULTIPLIERS: Record<string, number> = {
+  eu: 0.92,
+  norway: 0.026,
+  us: 1.0,
+  iceland: 0.039,
+};
+
+function stubEstimate(act: any, searchQuery: string, regionKey: string) {
   const q = searchQuery.toLowerCase();
   let activityId = "consumer_goods-type_general";
   let factorName = "General consumer goods";
@@ -604,7 +603,6 @@ function stubEstimate(act: any, searchQuery: string) {
     factorName = "Water supply";
   }
 
-  // Deterministic estimate
   const quantity = act.quantity || act.amount || 1;
   const factors: Record<string, number> = {
     Weight: 0.9,
@@ -616,8 +614,9 @@ function stubEstimate(act: any, searchQuery: string) {
     Number: 50,
     Area: 15,
   };
-  const factor = factors[act.unit_type as string] || 1.0;
-  const co2e_kg = quantity * factor;
+  const baseFactor = factors[act.unit_type as string] || 1.0;
+  const regionMult = REGION_STUB_MULTIPLIERS[regionKey] ?? 1.0;
+  const co2e_kg = quantity * baseFactor * regionMult;
 
   return {
     matched_factor: {
@@ -634,11 +633,11 @@ function stubEstimate(act: any, searchQuery: string) {
 
 // ─── Fallback estimate ──────────────────────────────────
 
-function fallbackEstimate(projectId: string, act: any, factor: any, confidence: number) {
+function fallbackEstimate(projectId: string, act: any, factor: any, confidence: number, regionKey?: string) {
   return {
     project_id: projectId,
     activity_id: act.id,
-    region: act.region,
+    region: regionKey ?? act.region,
     matched_factor: {
       id: factor?.activity_id || "unmatched",
       name: factor?.name || "No factor matched",
@@ -656,14 +655,12 @@ function fallbackEstimate(projectId: string, act: any, factor: any, confidence: 
 
 function mapRegionToClimatiq(region: string): string {
   const map: Record<string, string> = {
-    texas_ercot: "US-TX", norway_hydro: "NO", virginia_pjm: "US-VA",
-    iowa_miso: "US-IA", iceland_geo: "IS", singapore: "SG",
-    us_west: "US-CA", us_east: "US-VA", europe: "EU", uk: "GB",
-    germany: "DE", france: "FR", australia: "AU", japan: "JP",
-    china: "CN", india: "IN", brazil: "BR", canada: "CA", global: "GLOBAL",
-    US: "US", us: "US",
+    eu: "EU",
+    norway: "NO",
+    us: "US",
+    iceland: "IS",
   };
-  return map[region] || "GLOBAL";
+  return map[region?.toLowerCase()] || "GLOBAL";
 }
 
 // ─── Unit mappers ───────────────────────────────────────
