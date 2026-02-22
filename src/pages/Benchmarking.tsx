@@ -23,6 +23,14 @@ const RENEWABLE_MIX: Record<string, number> = {
   US: 28,
 };
 
+/* ── Region PUE (indicative averages) ────────────────────────────────── */
+const PUE_BY_REGION: Record<string, number> = {
+  NO: 1.12,
+  IS: 1.10,
+  EU: 1.40,
+  US: 1.45,
+};
+
 /*
  * Industry benchmarks: annual operational carbon (t CO₂e / yr) for a
  * comparable-scale facility, based on 2024–25 sustainability reports.
@@ -54,7 +62,7 @@ export default function Benchmarking() {
 
   const comparisonRegions = project.comparisonRegions ?? [];
   const hasComparisons = comparisonRegions.length > 0;
-  const primaryRegion = project.primaryRegion || "global";
+  const primaryRegion = project.primaryRegion || "EU";
 
   /* ── Load simulation estimates after job completes ─────────────────── */
   const loadSimEstimates = useCallback(async () => {
@@ -105,12 +113,11 @@ export default function Benchmarking() {
   // Totals per region
   const regionTotals = useMemo(() => {
     const totals: Record<string, number> = {};
-    // Home estimates
+    // Home estimates always map to primaryRegion
     for (const e of estimates) {
-      const r = e.region || primaryRegion;
-      totals[r] = (totals[r] ?? 0) + e.co2eKg;
+      totals[primaryRegion] = (totals[primaryRegion] ?? 0) + e.co2eKg;
     }
-    // Simulation estimates
+    // Simulation estimates — region field is already mapped to simulation_region by the adapter
     for (const e of simEstimates) {
       const r = e.region || primaryRegion;
       totals[r] = (totals[r] ?? 0) + e.co2eKg;
@@ -334,7 +341,7 @@ export default function Benchmarking() {
             <InsightCard
               icon={<Zap className="h-3.5 w-3.5" />}
               title="Energy Efficiency"
-              value={project.primaryRegion === "NO" || project.primaryRegion === "IS" ? "PUE 1.12" : "PUE —"}
+              value={`PUE ${PUE_BY_REGION[primaryRegion] ?? 1.58}`}
               sub="Power Usage Effectiveness"
               color="text-blue-500"
               bgColor="bg-blue-500/10"
