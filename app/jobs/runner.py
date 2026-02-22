@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable
 
+logger = logging.getLogger(__name__)
+
 from app.jobs.deterministic import build_extracted_activities
-from app.jobs.gemini_extraction import _build_parts, extract_with_gemini
+from app.jobs.gemini_extraction import _build_parts, classify_phases_with_gemini, extract_with_gemini
 from app.jobs.mapping_pipeline import run_mapping_pipeline
 from app.settings import get_settings
 from app.storage import activities_repo, documents_repo, estimates_repo, jobs_repo, projects_repo
@@ -90,11 +93,32 @@ class JobRunner:
                 await asyncio.sleep(step_delay)
                 activities = build_extracted_activities(project, docs)
 
+            # Phase classification via Gemini (if key available)
+            if gemini_key and activities:
+                jobs_repo.update_job(
+                    job_id,
+                    progress=88,
+                    stage="classifying_phases",
+                    message=f"Classifying {len(activities)} activities into embodied/operational…",
+                )
+                try:
+                    phase_map = await classify_phases_with_gemini(gemini_key, activities)
+                    if phase_map:
+                        activities = [
+                            act.model_copy(update={
+                                "phase": phase_map[act.id]["phase"],
+                                "phaseReason": phase_map[act.id]["reason"],
+                            }) if act.id in phase_map else act
+                            for act in activities
+                        ]
+                except Exception as exc:
+                    logger.warning("Phase classification failed: %s", exc)
+
             activities_repo.replace_activities(project_id, activities)
 
             jobs_repo.update_job(
                 job_id,
-                progress=90,
+                progress=95,
                 stage="writing_activities",
                 message="Persisting extracted activities",
             )

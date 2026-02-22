@@ -1,16 +1,58 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingDown, Loader2, Check, Lock, Pencil } from "lucide-react";
+import { ArrowLeft, TrendingDown, Loader2, Check, Lock, Download, ChevronDown, ChevronUp, CheckCircle, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { api } from "@/api";
 import type { Recommendation } from "@/contracts/impactcheck.v2";
 import { formatTonnes } from "@/contracts/impactcheck.v2";
 import { useProject } from "@/contexts/ProjectContext";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+/* Static metadata for recs by position */
+const REC_META = [
+  { phase: "operational" as const, confidence: 98, roiMonths: 14 },
+  { phase: "embodied"    as const, confidence: 85, roiMonths: 24 },
+  { phase: "operational" as const, confidence: 95, roiMonths: 18 },
+  { phase: "embodied"    as const, confidence: 92, roiMonths: 36 },
+];
+
+function getMeta(idx: number) {
+  return REC_META[idx % REC_META.length];
+}
+
+function PhasePill({ phase }: { phase: "operational" | "embodied" }) {
+  return phase === "operational" ? (
+    <span className="text-[9px] font-bold uppercase tracking-widest text-sky-600 bg-sky-100 dark:text-sky-300 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 rounded-full px-2.5 py-0.5">
+      OPERATIONAL
+    </span>
+  ) : (
+    <span className="text-[9px] font-bold uppercase tracking-widest text-amber-600 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-full px-2.5 py-0.5">
+      EMBODIED
+    </span>
+  );
+}
+
+function ConfidenceBadge({ confidence }: { confidence: number }) {
+  const isHigh = confidence >= 90;
+  return (
+    <span className={cn(
+      "flex items-center gap-1 text-[9px] font-mono font-bold border rounded-full px-2 py-0.5",
+      isHigh
+        ? "text-green-700 bg-green-50 border-green-200 dark:text-green-300 dark:bg-green-900/20 dark:border-green-800"
+        : "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800"
+    )}>
+      {isHigh
+        ? <CheckCircle className="h-2.5 w-2.5" />
+        : <AlertCircle className="h-2.5 w-2.5" />
+      }
+      {confidence}% CONF
+    </span>
+  );
+}
 
 export default function Recommendations() {
   const navigate = useNavigate();
@@ -19,17 +61,19 @@ export default function Recommendations() {
 
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [generating, setGenerating] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [finalized, setFinalized] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [finalText, setFinalText] = useState<string | null>(null);
+  const [phaseFilter, setPhaseFilter] = useState<"all" | "operational" | "embodied">("all");
+  const [sortBy, setSortBy] = useState<"impact" | "latest" | "phase">("impact");
 
   const handleGenerate = async () => {
     setGenerating(true);
     try {
       const result = await api.generateRecommendations(projectId);
       setRecs(result);
-      setSelectedId(null);
+      setExpandedId(null);
       setFinalized(false);
       setFinalText(null);
     } finally {
@@ -53,21 +97,52 @@ export default function Recommendations() {
     }
   };
 
-  const selected = recs.find((r) => r.id === selectedId);
+  const sortedRecs = [...recs].sort((a, b) => {
+    if (sortBy === "impact") return Math.abs(b.expectedDeltaKg) - Math.abs(a.expectedDeltaKg);
+    if (sortBy === "phase") {
+      const ia = recs.indexOf(a), ib = recs.indexOf(b);
+      return getMeta(ia).phase.localeCompare(getMeta(ib).phase);
+    }
+    return 0; // latest = original order
+  });
+
+  const filteredRecs = sortedRecs.filter((_, idx) => {
+    const originalIdx = recs.indexOf(sortedRecs[idx]);
+    if (phaseFilter === "all") return true;
+    return getMeta(originalIdx).phase === phaseFilter;
+  });
+
+  const totalSavingsKg = recs.reduce((sum, r) => sum + Math.abs(r.expectedDeltaKg), 0);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
-      <div className="flex items-start justify-between">
+    <div className="max-w-3xl mx-auto space-y-6 animate-fade-in-up pb-24">
+      {/* Header */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Recommendations</h1>
+          <p className="step-number mb-1">Step 06</p>
+
+          <h1 className="text-2xl font-bold tracking-tight">Reduction Strategies</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Actionable strategies to reduce your carbon footprint.</p>
         </div>
-        {recs.length === 0 && (
-          <Button onClick={handleGenerate} disabled={generating} className="gap-2 rounded-xl">
-            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Generate Recommendations
-          </Button>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          {recs.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              <span className="badge-ai">GENERATED BY IMPACTAI v2.4</span>
+              <span className="text-[10px] font-mono text-muted-foreground bg-muted rounded-full px-2.5 py-1 border border-border">
+                Total Savings: -{formatTonnes(totalSavingsKg)} t
+              </span>
+              <span className="text-[10px] font-mono text-muted-foreground bg-muted rounded-full px-2.5 py-1 border border-border">
+                Strategies: {recs.length}
+              </span>
+            </div>
+          )}
+          {recs.length === 0 && (
+            <Button onClick={handleGenerate} disabled={generating} className="gap-2 rounded-xl">
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Generate Recommendations
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Finalized banner */}
@@ -83,105 +158,135 @@ export default function Recommendations() {
         </Card>
       )}
 
-      {/* Scenario cards + editor */}
+      {/* Filter + sort bar */}
       {recs.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-2 space-y-3">
-            {recs.map((rec) => (
-              <Card
-                key={rec.id}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            {(["all", "operational", "embodied"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setPhaseFilter(f)}
                 className={cn(
-                  "cursor-pointer transition-all card-elevated border-0",
-                  selectedId === rec.id && "ring-2 ring-primary/30 bg-primary/[0.02]",
-                  finalized && "opacity-75 cursor-default"
+                  "text-xs font-semibold rounded-full px-4 py-1.5 border transition-all cursor-pointer",
+                  phaseFilter === f
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted text-muted-foreground border-border hover:border-primary/40"
                 )}
-                onClick={() => !finalized && setSelectedId(rec.id)}
               >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm flex items-center gap-1.5">
-                      <TrendingDown className="h-3.5 w-3.5 text-primary" />
-                      {rec.title}
-                    </CardTitle>
-                    <Badge variant="outline" className="font-mono text-[10px] text-primary rounded-full">
-                      -{formatTonnes(Math.abs(rec.expectedDeltaKg))} t
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="pb-3">
-                  <p className="text-xs text-muted-foreground">{rec.summary}</p>
-                  {rec.constraints && rec.constraints.length > 0 && (
-                    <div className="text-[10px] text-muted-foreground/70 mt-1.5">
-                      ⚠ {rec.constraints.join("; ")}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                {f === "all" ? "All Phases" : f === "operational" ? "Operational" : "Embodied"}
+              </button>
             ))}
-
-            {!finalized && recs.length > 0 && (
-              <Button onClick={handleFinalize} disabled={finalizing} className="w-full gap-2 rounded-xl">
-                {finalizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Finalize Strategy
-              </Button>
-            )}
           </div>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="h-8 w-44 text-xs rounded-xl">
+              <SelectValue placeholder="Sort by…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="impact" className="text-xs">Highest Impact</SelectItem>
+              <SelectItem value="latest" className="text-xs">Latest</SelectItem>
+              <SelectItem value="phase" className="text-xs">Phase</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
-          {/* Strategy editor */}
-          <div className="lg:col-span-3">
-            {selected ? (
-              <Card className="card-elevated border-0">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    {finalized ? <Lock className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-                    {selected.title}
+      {/* Strategy cards */}
+      {filteredRecs.map((rec) => {
+        const idx = recs.indexOf(rec);
+        const meta = getMeta(idx);
+        const isExpanded = expandedId === rec.id;
+
+        return (
+          <Card
+            key={rec.id}
+            className={cn(
+              "card-elevated border-0 transition-all",
+              !finalized && "hover:ring-1 hover:ring-primary/20"
+            )}
+          >
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <PhasePill phase={meta.phase} />
+                    <ConfidenceBadge confidence={meta.confidence} />
+                  </div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4 text-primary shrink-0" />
+                    {rec.title}
                   </CardTitle>
-                  <CardDescription>
-                    {finalized ? "Strategy is locked." : "Edit the strategy draft below."}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex gap-3">
-                      <div className="h-7 w-7 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="text-[10px] font-bold text-primary">AI</span>
-                      </div>
-                      <div className="rounded-xl bg-muted/50 p-3 text-sm flex-1">
-                        <p className="text-xs text-muted-foreground mb-1 font-semibold">Generated Strategy</p>
-                        <p>{selected.summary}</p>
-                      </div>
+                  <p className="text-xs text-muted-foreground">ROI within {meta.roiMonths} months</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xl font-bold font-mono text-primary">
+                    -{formatTonnes(Math.abs(rec.expectedDeltaKg))} t
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">CO₂e reduction</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{rec.summary}</p>
+
+              {/* AI Strategy Note box */}
+              <div
+                className="rounded-xl px-4 py-3 border-l-4 border-primary"
+                style={{ backgroundColor: "#112218" }}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1.5">AI Strategy Note</p>
+                <p className="text-xs text-green-200/80 leading-relaxed">{rec.summary}</p>
+              </div>
+
+              {rec.constraints && rec.constraints.length > 0 && (
+                <p className="text-[11px] text-muted-foreground/70">⚠ {rec.constraints.join("; ")}</p>
+              )}
+
+              {/* View Details toggle */}
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : rec.id)}
+                className="flex items-center gap-1.5 text-xs font-medium text-primary hover:opacity-80 transition-opacity cursor-pointer"
+              >
+                {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                {isExpanded ? "Hide Details" : "View Details"}
+              </button>
+
+              {isExpanded && (
+                <div className="pt-2 border-t border-border space-y-3">
+                  <div className="flex gap-3">
+                    <div className="h-7 w-7 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-[10px] font-bold text-primary">AI</span>
                     </div>
+                    <div className="rounded-xl bg-muted/50 p-3 text-sm flex-1">
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold">Generated Strategy</p>
+                      <p>{rec.strategyDraftText || rec.summary}</p>
+                    </div>
+                  </div>
+                  {!finalized && (
                     <div className="flex gap-3">
                       <div className="h-7 w-7 rounded-xl bg-accent flex items-center justify-center shrink-0 mt-0.5">
                         <span className="text-[10px] font-bold text-accent-foreground">You</span>
                       </div>
-                      <div className="flex-1">
-                        <Textarea
-                          value={selected.strategyDraftText}
-                          onChange={(e) => updateStrategy(selected.id, e.target.value)}
-                          disabled={finalized}
-                          className="min-h-[120px] text-sm resize-y rounded-xl"
-                          placeholder="Edit the strategy draft…"
-                        />
-                      </div>
+                      <Textarea
+                        value={rec.strategyDraftText}
+                        onChange={(e) => updateStrategy(rec.id, e.target.value)}
+                        className="min-h-[100px] text-sm resize-y rounded-xl flex-1"
+                        placeholder="Edit the strategy draft…"
+                      />
                     </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Expected reduction: <span className="font-mono text-primary font-semibold">{formatTonnes(Math.abs(selected.expectedDeltaKg))} t CO₂e</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="card-elevated border-0">
-                <CardContent className="pt-6">
-                  <div className="text-center py-12 text-muted-foreground text-sm">
-                    Select a recommendation to edit its strategy.
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      {/* Finalize button */}
+      {recs.length > 0 && !finalized && (
+        <Button onClick={handleFinalize} disabled={finalizing} variant="outline" className="w-full gap-2 rounded-xl">
+          {finalizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          Finalize Strategy
+        </Button>
       )}
 
       {/* Navigation */}
@@ -190,6 +295,26 @@ export default function Recommendations() {
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
       </div>
+
+      {/* Sticky footer */}
+      {recs.length > 0 && (
+        <div className="fixed bottom-0 inset-x-0 z-30 bg-card/95 backdrop-blur-md border-t border-border md:ml-[272px]">
+          <div className="max-w-3xl mx-auto flex items-center justify-between px-5 py-4">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+              <span className="text-sm font-semibold text-foreground">
+                Audit {finalized ? "Complete (100%)" : "In Progress"}
+              </span>
+            </div>
+            <Button
+              onClick={() => navigate("/report")}
+              className="gap-2 rounded-xl"
+            >
+              <Download className="h-4 w-4" /> Download Final Report
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

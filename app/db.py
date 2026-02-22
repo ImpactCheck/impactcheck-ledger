@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS activities (
     currency TEXT,
     source_document_id TEXT,
     note TEXT,
+    category TEXT,
+    phase TEXT,
+    phase_reason TEXT,
     FOREIGN KEY(project_id) REFERENCES projects(id)
 );
 CREATE INDEX IF NOT EXISTS idx_activities_project_id ON activities(project_id);
@@ -145,11 +148,17 @@ def utc_now_iso() -> str:
 
 
 def _migrate_activities_search_query(conn: sqlite3.Connection) -> None:
-    """Add search_query column to activities if missing (existing DBs)."""
+    """Add search_query, category, phase, and phase_reason columns to activities if missing."""
     cursor = conn.execute("PRAGMA table_info(activities)")
     columns = [row[1] for row in cursor.fetchall()]
-    if "search_query" not in columns:
-        conn.execute("ALTER TABLE activities ADD COLUMN search_query TEXT")
+    for col, sql in [
+        ("search_query", "ALTER TABLE activities ADD COLUMN search_query TEXT"),
+        ("category", "ALTER TABLE activities ADD COLUMN category TEXT"),
+        ("phase", "ALTER TABLE activities ADD COLUMN phase TEXT"),
+        ("phase_reason", "ALTER TABLE activities ADD COLUMN phase_reason TEXT"),
+    ]:
+        if col not in columns:
+            conn.execute(sql)
 
 
 def _migrate_estimates_optional_columns(conn: sqlite3.Connection) -> None:

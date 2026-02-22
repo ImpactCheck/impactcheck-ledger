@@ -482,6 +482,9 @@ async def extract_with_gemini(
             raw = item.get("raw_text") or ""
             sq = _normalize_search_query(item.get("search_query") or raw)
 
+            raw_cat = item.get("category") or None
+            category = raw_cat.upper() if raw_cat else None
+
             activities.append(
                 ExtractedActivity(
                     id=f"act_{idx + 1:04d}",
@@ -496,6 +499,7 @@ async def extract_with_gemini(
                     currency=item.get("currency") or None,
                     sourceDocumentId=src_doc.id if src_doc else None,
                     note=(raw[:200] if raw else item.get("note") or None),
+                    category=category,
                 )
             )
 
@@ -512,3 +516,107 @@ def _to_float(val: object) -> float | None:
         return float(val)
     except (TypeError, ValueError):
         return None
+
+
+PHASE_CLASSIFICATION_PROMPT = """\
+You are a carbon accounting expert specialising in AI data-center infrastructure,
+following the GHG Protocol embodied/operational distinction.
+
+DEFINITIONS (apply strictly in this order):
+1. EMBODIED — one-time capital expenditures for setting up AI-enabling infrastructure:
+   • Server / GPU / accelerator procurement (H100, A100, GB200, DGX, etc.)
+   • Cooling equipment installation (CRAC/CRAH units, liquid cooling manifolds, CDUs)
+   • Electrical & mechanical infrastructure (PDUs, switchgear, UPS, transformers, generators)
+   • Data-center construction, fit-out, civil works, steel, concrete, cabling
+   • Network hardware (switches, routers, optics — one-time)
+   • Battery / energy-storage systems (Megapack, Powerpack)
+   • Any item described with: purchased, procured, installed, deployed, manufactured,
+     acquired, capex, one-time, units, servers, racks, modules
+
+2. OPERATIONAL — ongoing/recurring costs of running the data center:
+   • Electricity consumption (kWh, MWh, GWh — grid or on-site solar)
+   • Cooling energy use (chiller runtime, HVAC, mechanical ventilation)
+   • Diesel or natural-gas for backup generators / heating (fuel volumes or energy)
+   • Water consumption for cooling towers
+   • Network bandwidth / data transfer charges
+   • Cloud or co-location service fees (recurring SaaS, IaaS)
+   • Maintenance, support contracts, cleaning, staffing
+   • Any item described with: annual, monthly, per year, consumption, usage, billing,
+     ongoing, recurring, opex, kWh, MWh
+
+KEY RULE: If a quantity has physical units of kWh / MWh / GWh / litre / m³ / gallon
+(i.e. metered consumption) → ALWAYS operational.
+If a quantity is a count of physical assets (units, servers, racks) AND the description
+is about procurement/purchase → ALWAYS embodied.
+
+Return a JSON array, one object per input activity (include ALL ids):
+[{"id": "<activity_id>", "phase": "embodied" | "operational", "reason": "<one sentence>"}]
+
+Activities to classify:
+"""
+
+
+async def classify_phases_with_gemini(
+    api_key: str,
+    activities: list[ExtractedActivity],
+) -> dict[str, dict]:
+    """Call Gemini to classify each activity as embodied or operational.
+
+    Returns a dict mapping activity_id -> {"phase": str, "reason": str}.
+    """
+    if not activities:
+        return {}
+
+    activity_list = [
+        {
+            "id": act.id,
+            "text": act.text,
+            "category": act.category,
+            "quantity": act.quantity,
+            "unit": act.unit,
+        }
+        for act in activities
+    ]
+
+    prompt = PHASE_CLASSIFICATION_PROMPT + json.dumps(activity_list, indent=2)
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            GEMINI_URL,
+            params={"key": api_key},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.1,
+                    "maxOutputTokens": 8192,
+                    "response_mime_type": "application/json",
+                },
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    raw_text: str = (
+        data.get("candidates", [{}])[0]
+        .get("content", {})
+        .get("parts", [{}])[0]
+        .get("text", "")
+    )
+    raw_text = re.sub(r"```json\s*", "", raw_text)
+    raw_text = re.sub(r"```\s*", "", raw_text).strip()
+
+    result: dict[str, dict] = {}
+    if raw_text:
+        try:
+            parsed = json.loads(raw_text)
+            if isinstance(parsed, list):
+                for item in parsed:
+                    act_id = item.get("id")
+                    phase = item.get("phase")
+                    reason = item.get("reason", "")
+                    if act_id and phase in ("embodied", "operational"):
+                        result[act_id] = {"phase": phase, "reason": reason}
+        except Exception:
+            pass
+
+    return result

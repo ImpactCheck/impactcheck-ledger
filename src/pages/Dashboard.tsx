@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Plus, MapPin, Calendar, Building2, ArrowRight, Sun, Moon,
-  Trash2, BarChart2, Globe, Leaf, Sparkles,
+  Trash2, BarChart2, Globe, Leaf, Sparkles, Users,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -262,6 +262,8 @@ function ProjectCard({
 }) {
   const regionLabel = REGION_LABELS[proj.primaryRegion] ?? proj.primaryRegion?.replace(/_/g, " ") ?? "—";
   const isAiInfra = proj.companyType === "ai_infra";
+  const isCompleted = !!proj.baselineFootprintKgCO2e;
+  const progressPct = isCompleted ? 100 : 35; // Simple heuristic
 
   return (
     <Card
@@ -272,13 +274,29 @@ function ProjectCard({
       onClick={() => onOpen(proj)}
     >
       <CardContent className="p-5">
-        {/* Top row: title + actions */}
-        <div className="flex items-start justify-between gap-2 mb-4">
+        {/* Top row: title + status + delete */}
+        <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span className={isCompleted ? "status-completed" : "status-in-progress"}>
+                {isCompleted ? "COMPLETED" : "IN PROGRESS"}
+              </span>
+              <div
+                className={cn(
+                  "flex items-center gap-1 text-[10px] rounded-full px-2 py-0.5 font-medium",
+                  isAiInfra
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {isAiInfra ? <Sparkles className="h-2.5 w-2.5" /> : <Building2 className="h-2.5 w-2.5" />}
+                {isAiInfra ? "AI Infra" : "Enterprise"}
+              </div>
+            </div>
             <h3 className="font-semibold text-[15px] truncate group-hover:text-primary transition-colors">
               {proj.name}
             </h3>
-            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Calendar className="h-3 w-3" />
                 {proj.year}
@@ -290,7 +308,7 @@ function ProjectCard({
             </div>
           </div>
 
-          {/* Delete button — always reachable, subtle until hover */}
+          {/* Delete button */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <button
@@ -321,32 +339,49 @@ function ProjectCard({
           </AlertDialog>
         </div>
 
-        {/* Bottom row: type badge + baseline + arrow */}
-        <div className="flex items-center gap-2 pt-3.5 border-t border-border/70">
-          <div
-            className={cn(
-              "flex items-center gap-1.5 text-xs rounded-full px-2.5 py-0.5 font-medium",
-              isAiInfra
-                ? "bg-primary/10 text-primary"
-                : "bg-muted text-muted-foreground"
-            )}
-          >
-            {isAiInfra ? <Sparkles className="h-3 w-3" /> : <Building2 className="h-3 w-3" />}
-            {isAiInfra ? "AI Infra" : "Enterprise"}
+        {/* Progress bar */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-muted-foreground font-mono">Progress</span>
+            <span className="text-[10px] text-muted-foreground font-mono">{progressPct}%</span>
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Bottom row: team avatars + baseline + action */}
+        <div className="flex items-center gap-2 pt-3 border-t border-border/70">
+          {/* Static team avatars */}
+          <div className="flex items-center -space-x-2">
+            <div className="h-6 w-6 rounded-full bg-primary/20 border-2 border-card flex items-center justify-center">
+              <span className="text-[8px] font-bold text-primary">AM</span>
+            </div>
+            <div className="h-6 w-6 rounded-full bg-muted border-2 border-card flex items-center justify-center">
+              <Users className="h-2.5 w-2.5 text-muted-foreground" />
+            </div>
           </div>
 
           {proj.baselineFootprintKgCO2e && (
-            <span className="text-xs text-muted-foreground font-mono ml-auto mr-1">
+            <span className="text-xs text-muted-foreground font-mono">
               {formatTonnes(proj.baselineFootprintKgCO2e)} t
             </span>
           )}
 
-          <ArrowRight
-            className={cn(
-              "h-4 w-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all",
-              !proj.baselineFootprintKgCO2e && "ml-auto"
+          <div className="ml-auto flex items-center gap-1.5">
+            {isCompleted ? (
+              <span className="text-xs text-primary font-medium flex items-center gap-1">
+                View Report <ArrowRight className="h-3 w-3" />
+              </span>
+            ) : (
+              <span className="text-xs text-primary font-medium flex items-center gap-1">
+                Resume Audit <ArrowRight className="h-3 w-3" />
+              </span>
             )}
-          />
+          </div>
         </div>
       </CardContent>
     </Card>

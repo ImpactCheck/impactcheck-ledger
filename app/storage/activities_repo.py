@@ -5,11 +5,12 @@ from app.models import ExtractedActivity
 
 
 def _row_to_activity(row) -> ExtractedActivity:
+    cols = row.keys() if hasattr(row, "keys") else []
     return ExtractedActivity(
         id=row["id"],
         projectId=row["project_id"],
         text=row["text"],
-        search_query=row["search_query"] if "search_query" in row.keys() else None,
+        search_query=row["search_query"] if "search_query" in cols else None,
         unit_type=row["unit_type"],
         region=row["region"],
         quantity=float(row["quantity"]) if row["quantity"] is not None else None,
@@ -18,6 +19,9 @@ def _row_to_activity(row) -> ExtractedActivity:
         currency=row["currency"],
         sourceDocumentId=row["source_document_id"],
         note=row["note"],
+        category=row["category"] if "category" in cols else None,
+        phase=row["phase"] if "phase" in cols else None,
+        phaseReason=row["phase_reason"] if "phase_reason" in cols else None,
     )
 
 
@@ -39,8 +43,8 @@ def replace_activities(project_id: str, activities: list[ExtractedActivity]) -> 
             """
             INSERT INTO activities (
                 id, project_id, text, search_query, unit_type, region, quantity, unit, amount,
-                currency, source_document_id, note
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                currency, source_document_id, note, category, phase, phase_reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -56,6 +60,9 @@ def replace_activities(project_id: str, activities: list[ExtractedActivity]) -> 
                     activity.currency,
                     activity.sourceDocumentId,
                     activity.note,
+                    activity.category,
+                    activity.phase,
+                    activity.phaseReason,
                 )
                 for activity in activities
             ],

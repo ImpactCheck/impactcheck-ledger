@@ -3,6 +3,8 @@ import type { UseCase } from "@/contexts/ProjectContext";
 // ─── Report Section IDs ──────────────────────────────────────────────
 export type ReportSectionId =
   | "executive-summary"
+  | "phase-split"
+  | "region-map"
   | "hotspots"
   | "scenarios"
   | "compliance"
@@ -33,6 +35,8 @@ export interface PresentationLayout {
 const COMPANY_LAYOUT: PresentationLayout = {
   sections: [
     { id: "executive-summary" },
+    { id: "phase-split", hero: true },
+    { id: "region-map", hero: true },
     { id: "hotspots", hero: true },
     { id: "scenarios", hero: true },
     { id: "compliance" },
@@ -49,6 +53,8 @@ const COMPANY_LAYOUT: PresentationLayout = {
 const INVESTOR_LAYOUT: PresentationLayout = {
   sections: [
     { id: "executive-summary", hero: true },
+    { id: "phase-split", hero: true },
+    { id: "region-map", hero: true },
     { id: "compliance", hero: true },
     { id: "data-quality", hero: true },
     { id: "missing-data" },
@@ -65,6 +71,8 @@ const INVESTOR_LAYOUT: PresentationLayout = {
 const REGULATOR_LAYOUT: PresentationLayout = {
   sections: [
     { id: "compliance", hero: true },
+    { id: "phase-split", hero: true },
+    { id: "region-map", hero: true },
     { id: "missing-data", hero: true },
     { id: "traceability", hero: true },
     { id: "executive-summary" },
@@ -81,6 +89,8 @@ const REGULATOR_LAYOUT: PresentationLayout = {
 const OTHER_LAYOUT: PresentationLayout = {
   sections: [
     { id: "executive-summary", hero: true },
+    { id: "phase-split", hero: true },
+    { id: "region-map", hero: true },
     { id: "region-comparison", hero: true },
     { id: "hotspots" },
     { id: "data-quality" },
@@ -134,6 +144,8 @@ export function getReportLayout(
 
 export const SECTION_LABELS: Record<ReportSectionId, string> = {
   "executive-summary": "Executive Summary",
+  "phase-split": "Embodied vs Operational Split",
+  "region-map": "Emissions by Region",
   hotspots: "Top Hotspots",
   scenarios: "Reduction Scenarios",
   compliance: "Regulatory Compliance",

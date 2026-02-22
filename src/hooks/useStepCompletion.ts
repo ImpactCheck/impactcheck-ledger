@@ -7,6 +7,7 @@ export interface StepCompletion {
   upload: boolean;
   activities: boolean;
   mapping: boolean;
+  benchmarking: boolean;
   report: boolean;
   recommendations: boolean;
 }
@@ -16,6 +17,7 @@ const EMPTY: StepCompletion = {
   upload: false,
   activities: false,
   mapping: false,
+  benchmarking: false,
   report: false,
   recommendations: false,
 };
@@ -54,6 +56,7 @@ export function useStepCompletion(): StepCompletion {
         upload: hasDocuments,
         activities: hasActivities,
         mapping: hasEstimates,
+        benchmarking: hasEstimates, // Benchmarking available once mapping done
         report: hasEstimates, // Report can be generated once estimates exist
         recommendations: hasEstimates,
       });

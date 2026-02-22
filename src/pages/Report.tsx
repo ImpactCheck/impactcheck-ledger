@@ -18,6 +18,8 @@ import {
 
 // Section components
 import { ExecutiveSummarySection } from "@/components/report/ExecutiveSummarySection";
+import { PhaseSplitSection } from "@/components/report/PhaseSplitSection";
+import { RegionMapSection } from "@/components/report/RegionMapSection";
 import { HotspotsSection } from "@/components/report/HotspotsSection";
 import { ComplianceSection } from "@/components/report/ComplianceSection";
 import { CategoryBreakdownSection } from "@/components/report/CategoryBreakdownSection";
@@ -90,6 +92,10 @@ export default function Report() {
       switch (section.id) {
         case "executive-summary":
           return <ExecutiveSummarySection report={report} primaryRegion={primaryRegion} hero={isHero} />;
+        case "phase-split":
+          return <PhaseSplitSection categories={categories} hero={isHero} />;
+        case "region-map":
+          return <RegionMapSection totalsByRegion={report.totalsByRegion} hero={isHero} />;
         case "hotspots":
           return <HotspotsSection report={report} limit={layout.limits.hotspots} hero={isHero} />;
         case "scenarios":
@@ -152,7 +158,7 @@ export default function Report() {
             <p className="font-medium">{error ?? "No report data available."}</p>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            Complete the Setup, Upload, Activities, and Mapping steps before viewing the report.
+            Complete the Setup, Upload, Emissions, and Mapping steps before viewing the report.
           </p>
           <Button variant="outline" onClick={() => navigate("/setup")} className="mt-4 gap-2 rounded-xl">
             <ArrowLeft className="h-4 w-4" /> Go to Setup
@@ -163,17 +169,17 @@ export default function Report() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 print:space-y-4 print:max-w-none print:p-0 animate-fade-in-up">
+    <div className="max-w-5xl mx-auto space-y-6 print:space-y-4 print:max-w-none print:p-0 animate-fade-in-up">
       {/* Header */}
       <div className="flex items-center justify-between print:hidden">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <p className="step-number">Step 5</p>
+            <p className="step-number">Step 05</p>
             <Badge variant="outline" className="text-[10px] rounded-full font-mono">
               {USE_CASE_LABELS[useCase]} view
             </Badge>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Carbon Report</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Carbon Audit Final Report</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Full lifecycle carbon assessment per GHG Protocol.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -195,7 +201,7 @@ export default function Report() {
 
       {/* Print-only header */}
       <div className="hidden print:block">
-        <h1 className="text-xl font-bold">ImpactCheck — Carbon Report</h1>
+        <h1 className="text-xl font-bold">ImpactCheck — Carbon Audit Final Report</h1>
         <p className="text-sm">{project.projectName} · {project.year} · {primaryRegion.replace(/_/g, " ")} · {USE_CASE_LABELS[useCase]} view</p>
       </div>
 
@@ -204,7 +210,7 @@ export default function Report() {
 
       {/* Navigation */}
       <div className="flex justify-between print:hidden">
-        <Button variant="outline" onClick={() => navigate("/mapping")} className="gap-2 rounded-xl">
+        <Button variant="outline" onClick={() => navigate("/benchmarking")} className="gap-2 rounded-xl">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
         <Button onClick={() => navigate("/recommendations")} className="gap-2 rounded-xl">
