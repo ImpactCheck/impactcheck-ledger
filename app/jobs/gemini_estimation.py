@@ -12,7 +12,7 @@ import urllib.request
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-3-flash-preview"
+GEMINI_MODEL = "gemini-3.1-pro-preview"
 GEMINI_ESTIMATION_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     f"{GEMINI_MODEL}:generateContent"
@@ -26,6 +26,13 @@ activity described below.
 Activity: {activity_text}
 Quantity: {quantity_str}
 {factor_line}
+
+CRITICAL — NEVER RETURN ZERO:
+- You MUST provide a positive CO2e estimate. Zero is NEVER acceptable.
+- Every physical activity has a carbon footprint. Use industry benchmarks, typical \
+values, or conservative engineering estimates when exact data is unavailable.
+- If the Climatiq API had no matching factor or rejected the unit type, you are the \
+fallback: produce a defensible best-effort estimate.
 
 IMPORTANT — ANNUALISATION RULES:
 - Your answer must represent a FULL YEAR of impact (12 months).
@@ -51,7 +58,8 @@ assume 5-year lifetime → 300 kgCO2e/unit/year.
 Additional guidelines:
 - If quantity is unknown, search the document context above for the relevant quantity; \
 if not found use a conservative representative amount for a mid-size AI data center.
-- Do NOT return 0; always provide a best-effort positive estimate.
+- ABSOLUTELY NEVER return 0. Every activity has carbon impact — always provide a \
+positive best-effort estimate using industry benchmarks or typical values.
 - Be honest about confidence: "high" only if a specific quantity and unit are given.
 
 Respond with ONLY a JSON object (no markdown fences, no explanation):
@@ -125,7 +133,8 @@ def estimate_co2e_with_gemini(
             data = json.loads(resp.read().decode())
     except Exception as exc:
         logger.warning("Gemini estimation HTTP call failed for '%s': %s", activity_text[:60], exc)
-        return None
+        # Zero is never acceptable — use minimum fallback when API fails
+        return 1.0
 
     try:
         raw_text = (
@@ -146,7 +155,14 @@ def estimate_co2e_with_gemini(
                 result.get("confidence", "?"),
             )
             return co2e
-        return None
+        # Zero is never acceptable — use conservative minimum as last resort
+        logger.warning(
+            "Gemini returned co2e=%.2f for '%s'; using minimum fallback 1.0 kgCO2e",
+            co2e,
+            activity_text[:60],
+        )
+        return 1.0
     except Exception as exc:
         logger.warning("Gemini estimation parse failed for '%s': %s", activity_text[:60], exc)
-        return None
+        # Zero is never acceptable — use minimum fallback when parse fails
+        return 1.0
