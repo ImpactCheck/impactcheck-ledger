@@ -135,6 +135,82 @@ function regionToJurisdiction(region: string): "Norway" | "EU" | "USA" | "Icelan
   return "USA";
 }
 
+/** Robustly parse LLM-generated compliance JSON, repairing common truncation/malformation. */
+function parseComplianceJson(
+  rawText: string,
+  periodLabel: string,
+  regionKey: string
+): Record<string, unknown> {
+  const tryParse = (text: string): Record<string, unknown> | null => {
+    try {
+      return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  let candidate = rawText;
+  let result = tryParse(candidate);
+  if (result) return result;
+
+  // Extract JSON object (may be wrapped in markdown or prose)
+  const jsonMatch = candidate.match(/\{[\s\S]*\}/);
+  if (jsonMatch) candidate = jsonMatch[0];
+
+  result = tryParse(candidate);
+  if (result) return result;
+
+  // Fix trailing commas (common LLM error)
+  candidate = candidate.replace(/,\s*([}\]])/g, "$1");
+  result = tryParse(candidate);
+  if (result) return result;
+
+  // Fix truncated property values: "status": } or "status": , (no value)
+  const incompleteKeys = ["status", "value", "unit", "source", "evaluation_status", "computed_from"];
+  for (const key of incompleteKeys) {
+    const re = new RegExp(`"${key}"\\s*:\\s*([,}])`, "g");
+    candidate = candidate.replace(re, `"${key}": null$1`);
+  }
+  // computed_from expects array, not null
+  candidate = candidate.replace(/"computed_from"\s*:\s*null/g, '"computed_from": []');
+
+  result = tryParse(candidate);
+  if (result) return result;
+
+  // Fix truncation at end: "status": or "key": with nothing after — complete and close
+  const incompleteAtEnd = /("(?:status|value|unit|source|evaluation_status)")\s*:\s*$/;
+  const computedFromAtEnd = /"computed_from"\s*:\s*$/;
+  if (incompleteAtEnd.test(candidate)) {
+    candidate = candidate.replace(incompleteAtEnd, "$1: null");
+    const openBraces = (candidate.match(/\{/g) || []).length - (candidate.match(/\}/g) || []).length;
+    const openBrackets = (candidate.match(/\[/g) || []).length - (candidate.match(/\]/g) || []).length;
+    candidate += "}".repeat(Math.max(0, openBraces)) + "]".repeat(Math.max(0, openBrackets));
+    result = tryParse(candidate);
+    if (result) return result;
+  } else if (computedFromAtEnd.test(candidate)) {
+    candidate = candidate.replace(computedFromAtEnd, '"computed_from": []');
+    const openBraces = (candidate.match(/\{/g) || []).length - (candidate.match(/\}/g) || []).length;
+    const openBrackets = (candidate.match(/\[/g) || []).length - (candidate.match(/\]/g) || []).length;
+    candidate += "}".repeat(Math.max(0, openBraces)) + "]".repeat(Math.max(0, openBrackets));
+    result = tryParse(candidate);
+    if (result) return result;
+  }
+
+  // Try truncation repair: find last complete object boundary and close structure
+  const lastBrace = candidate.lastIndexOf("}");
+  if (lastBrace > 100) {
+    const truncated = candidate.slice(0, lastBrace + 1);
+    result = tryParse(truncated);
+    if (result) return result;
+  }
+
+  console.error(
+    `JSON parse error (${periodLabel}, ${regionKey}): Raw:`,
+    rawText.substring(0, 500)
+  );
+  return {};
+}
+
 async function evaluateCompliance(
   geminiApiKey: string,
   regionKey: string,
@@ -211,25 +287,10 @@ async function evaluateCompliance(
     }
 
     const geminiData = await geminiResp.json();
-    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    rawText = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
 
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch (e) {
-      console.error("JSON parse error:", e, "Raw:", rawText.substring(0, 200));
-      // Fallback: try to extract JSON
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          parsed = JSON.parse(jsonMatch[0]);
-        } catch {
-          parsed = {};
-        }
-      } else {
-        parsed = {};
-      }
-    }
+    const parsed = parseComplianceJson(rawText, periodLabel, regionKey);
 
     return {
       ...parsed,
