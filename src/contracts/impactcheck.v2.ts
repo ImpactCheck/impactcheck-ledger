@@ -106,6 +106,11 @@ export interface ActivityEstimate {
   mapping_confidence?: "high" | "medium" | "low";
 }
 
+export interface PhaseTotals {
+  embodied: number;
+  operational: number;
+}
+
 export interface Report {
   projectId: string;
   totalsByRegion: Record<string, number>;
@@ -113,6 +118,7 @@ export interface Report {
     string,
     { category: string; co2eKg: number }[]
   >;
+  phaseTotalsByRegion?: Record<string, PhaseTotals>;
   deltaVsBaselineKg?: number;
   compliance: {
     us: { status: "green" | "yellow" | "red"; reasons: string[] };

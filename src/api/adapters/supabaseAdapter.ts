@@ -251,6 +251,16 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         breakdowns[region].sort((a, b) => b.co2eKg - a.co2eKg);
       }
 
+      // Phase totals by region: use activity category (from extraction) for embodied/operational
+      const phaseTotals: Record<string, { embodied: number; operational: number }> = {};
+      for (const e of estimates) {
+        const region = (e.region && regionSet.has(e.region)) ? e.region : primaryRegion;
+        const act = activities.find((a) => a.id === e.activityId);
+        const phase = getActivityPhase(act?.category);
+        if (!phaseTotals[region]) phaseTotals[region] = { embodied: 0, operational: 0 };
+        phaseTotals[region][phase] += e.co2eKg;
+      }
+
       const primaryTotal = totals[primaryRegion] ?? 0;
       const deltaVsBaselineKg = project.baselineFootprintKgCO2e
         ? primaryTotal - project.baselineFootprintKgCO2e
@@ -266,6 +276,7 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         projectId,
         totalsByRegion: totals,
         categoryBreakdownByRegion: breakdowns,
+        phaseTotalsByRegion: phaseTotals,
         deltaVsBaselineKg,
         compliance: {
           us: {

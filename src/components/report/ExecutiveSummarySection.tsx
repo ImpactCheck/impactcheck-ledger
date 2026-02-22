@@ -1,9 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { ComplianceBadge } from "@/components/ComplianceBadge";
 import { Building2, Zap } from "lucide-react";
-import { formatTonnes, getActivityPhase } from "@/contracts/impactcheck.v2";
+import { formatTonnes } from "@/contracts/impactcheck.v2";
 import type { Report } from "@/contracts/impactcheck.v2";
-import { useMemo } from "react";
 
 const EMBODIED_COLOR = "hsl(30 80% 55%)";
 const OPERATIONAL_COLOR = "hsl(200 70% 50%)";
@@ -16,17 +15,7 @@ interface Props {
 
 export function ExecutiveSummarySection({ report, primaryRegion, hero }: Props) {
   const primaryTotal = report.totalsByRegion[primaryRegion] ?? 0;
-
-  const phaseTotals = useMemo(() => {
-    const categories = report.categoryBreakdownByRegion?.[primaryRegion] ?? [];
-    let embodied = 0;
-    let operational = 0;
-    for (const c of categories) {
-      if (getActivityPhase(c.category) === "embodied") embodied += c.co2eKg;
-      else operational += c.co2eKg;
-    }
-    return { embodied, operational };
-  }, [report, primaryRegion]);
+  const phaseTotals = report.phaseTotalsByRegion?.[primaryRegion] ?? { embodied: 0, operational: 0 };
 
   return (
     <div className="space-y-4">

@@ -1,18 +1,18 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Label, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { formatTonnes, getActivityPhase } from "@/contracts/impactcheck.v2";
+import { formatTonnes } from "@/contracts/impactcheck.v2";
+import type { PhaseTotals } from "@/contracts/impactcheck.v2";
 
 const EMBODIED_COLOR = "hsl(30 80% 55%)";
 const OPERATIONAL_COLOR = "hsl(200 70% 50%)";
 
 interface Props {
-  categories: { category: string; co2eKg: number }[];
+  phaseTotals: PhaseTotals;
   hero?: boolean;
 }
 
-export function PhaseSplitSection({ categories, hero }: Props) {
-  const embodied = categories.reduce((s, c) => s + (getActivityPhase(c.category) === "embodied" ? c.co2eKg : 0), 0);
-  const operational = categories.reduce((s, c) => s + (getActivityPhase(c.category) === "operational" ? c.co2eKg : 0), 0);
+export function PhaseSplitSection({ phaseTotals, hero }: Props) {
+  const { embodied, operational } = phaseTotals;
   const total = embodied + operational;
 
   if (total === 0) return null;
