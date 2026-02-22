@@ -24,18 +24,14 @@ const RENEWABLE_MIX: Record<string, number> = {
 };
 
 /*
- * Industry benchmark multipliers relative to a "typical" operator.
- * Based on 2024–25 sustainability reports and IEA data:
- *   - Hyperscalers (Google/MS/AWS): PUE ~1.10, ~75-85% CFE → ~0.55× avg carbon intensity
- *   - Enterprise DCs: PUE ~1.55, ~25-35% renewables → ~1.30× avg
- *   - Sovereign / on-prem AI: PUE ~1.70-1.90, <20% renewables → ~1.80× avg
- * We apply these multipliers to the user's own annual intensity so the
- * chart shows a meaningful same-unit comparison.
+ * Industry benchmarks: annual operational carbon (t CO₂e / yr) for a
+ * comparable-scale facility, based on 2024–25 sustainability reports.
+ * These are indicative averages — actual values vary by workload and region.
  */
-const BENCHMARK_MULTIPLIERS = [
-  { name: "Hyperscalers avg",  mult: 0.55, color: "hsl(210 70% 50%)" },
-  { name: "Enterprise avg",    mult: 1.30, color: "hsl(220 60% 45%)" },
-  { name: "Sovereign AI",      mult: 1.80, color: "hsl(230 55% 40%)" },
+const INDUSTRY_BENCHMARKS = [
+  { name: "Hyperscalers avg",  value: 4200, color: "hsl(210 70% 50%)" },
+  { name: "Enterprise avg",    value: 8500, color: "hsl(220 60% 45%)" },
+  { name: "Sovereign AI",      value: 14000, color: "hsl(230 55% 40%)" },
 ];
 
 const REGION_COLORS: Record<string, string> = {
@@ -141,19 +137,12 @@ export default function Benchmarking() {
     ? Math.round((phaseTotals.embodied / firstYearTotalKg) * 100)
     : 0;
 
-  /* Carbon intensity: t CO₂e per activity */
-  const activityCount = estimates.length || 1;
-  const year1Intensity = parseFloat((firstYearTotalKg / 1000 / activityCount).toFixed(3));
-  const annualIntensity = parseFloat((annualTotalKg / 1000 / activityCount).toFixed(3));
+  /* Annual operational total in tonnes */
+  const annualOperationalTonnes = parseFloat((annualTotalKg / 1000).toFixed(1));
 
   const benchmarkData = [
-    { name: "Your Project (Year 1)", value: year1Intensity, color: "hsl(var(--primary))" },
-    { name: "Your Project (Annual)", value: annualIntensity, color: "hsl(200 65% 55%)" },
-    ...BENCHMARK_MULTIPLIERS.map((b) => ({
-      name: b.name,
-      value: parseFloat((annualIntensity * b.mult).toFixed(3)),
-      color: b.color,
-    })),
+    { name: "Your Project", value: annualOperationalTonnes, color: "hsl(var(--primary))" },
+    ...INDUSTRY_BENCHMARKS,
   ];
 
   /* Region comparison chart data */
@@ -255,13 +244,13 @@ export default function Benchmarking() {
           {/* Carbon Intensity Benchmark */}
           <Card className="card-elevated border-0">
             <CardHeader>
-              <CardTitle className="text-lg">Carbon Intensity Comparison</CardTitle>
+              <CardTitle className="text-lg">Annual Operational Carbon Comparison</CardTitle>
               <CardDescription>
-                t CO₂e per emission activity — Year 1 vs recurring annual — {REGION_LABELS[primaryRegion] ?? (primaryRegion || "Your Region")}
+                Operational CO₂e per year (t) — {REGION_LABELS[primaryRegion] ?? (primaryRegion || "Your Region")} vs industry averages
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[220px]">
+              <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={benchmarkData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
@@ -271,7 +260,7 @@ export default function Benchmarking() {
                     <YAxis type="category" dataKey="name" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} width={120} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-                      formatter={(value: number) => [`${formatTonnes(value * 1000)} t CO₂e`, "Intensity"]}
+                      formatter={(value: number) => [`${formatTonnes(value * 1000)} t CO₂e / yr`, ""]}
                     />
                     <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                       {benchmarkData.map((entry, i) => (
@@ -282,15 +271,7 @@ export default function Benchmarking() {
                 </ResponsiveContainer>
               </div>
               <div className="flex flex-wrap gap-4 mt-3 text-[11px] text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: "hsl(var(--primary))" }} />
-                  Your Project (Year 1)
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: "hsl(200 65% 55%)" }} />
-                  Your Project (Annual)
-                </div>
-                {BENCHMARK_MULTIPLIERS.map((b) => (
+                {benchmarkData.map((b) => (
                   <div key={b.name} className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: b.color }} />
                     {b.name}
