@@ -17,10 +17,10 @@ import JobProgressCard from "@/components/JobProgressCard";
 
 /* ── Region-derived renewable mix ─────────────────────────────────────── */
 const RENEWABLE_MIX: Record<string, number> = {
-  norway: 94,
-  iceland: 97,
-  eu: 45,
-  us: 28,
+  NO: 94,
+  IS: 97,
+  EU: 45,
+  US: 28,
 };
 
 /*
@@ -35,10 +35,10 @@ const INDUSTRY_BENCHMARKS = [
 ];
 
 const REGION_COLORS: Record<string, string> = {
-  norway: "hsl(152 52% 40%)",
-  iceland: "hsl(200 65% 55%)",
-  eu: "hsl(210 70% 50%)",
-  us: "hsl(230 55% 40%)",
+  NO: "hsl(152 52% 40%)",
+  IS: "hsl(200 65% 55%)",
+  EU: "hsl(210 70% 50%)",
+  US: "hsl(230 55% 40%)",
 };
 
 export default function Benchmarking() {
@@ -334,7 +334,7 @@ export default function Benchmarking() {
             <InsightCard
               icon={<Zap className="h-3.5 w-3.5" />}
               title="Energy Efficiency"
-              value={project.primaryRegion === "norway" || project.primaryRegion === "iceland" ? "PUE 1.12" : "PUE —"}
+              value={project.primaryRegion === "NO" || project.primaryRegion === "IS" ? "PUE 1.12" : "PUE —"}
               sub="Power Usage Effectiveness"
               color="text-blue-500"
               bgColor="bg-blue-500/10"

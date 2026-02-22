@@ -16,10 +16,10 @@ export interface RegionData {
 }
 
 export const REGIONS: RegionData[] = [
-  { name: "eu", gridIntensity: 350, label: "EU (Mixed grid — ~350 g/kWh)" },
-  { name: "norway", gridIntensity: 10, label: "Norway (Hydro — ~10 g/kWh)" },
-  { name: "us", gridIntensity: 380, label: "US (Mixed grid — ~380 g/kWh)" },
-  { name: "iceland", gridIntensity: 15, label: "Iceland (Geothermal — ~15 g/kWh)" },
+  { name: "EU", gridIntensity: 350, label: "EU (Mixed grid — ~350 g/kWh)" },
+  { name: "NO", gridIntensity: 10, label: "Norway (Hydro — ~10 g/kWh)" },
+  { name: "US", gridIntensity: 380, label: "US (Mixed grid — ~380 g/kWh)" },
+  { name: "IS", gridIntensity: 15, label: "Iceland (Geothermal — ~15 g/kWh)" },
 ];
 
 const GPU_EMBODIED_KG = 2274; // kg CO2e per GB200 NVL72 rack
