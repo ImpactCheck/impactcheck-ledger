@@ -59,10 +59,7 @@ export default function DashboardLayout() {
         {/* Logo */}
         <div className="px-6 py-5 flex items-center gap-3 border-b border-sidebar-border/60">
           <img src={logoImg} alt="ImpactCheck" className="h-9 w-9 object-contain" />
-          <div>
-            <span className="text-base font-bold tracking-tight text-foreground">ImpactCheck</span>
-            <p className="text-[10px] text-muted-foreground font-mono -mt-0.5">Carbon Audit Platform</p>
-          </div>
+          <span className="text-base font-bold tracking-tight text-foreground">ImpactCheck</span>
         </div>
 
         {/* Navigation */}
