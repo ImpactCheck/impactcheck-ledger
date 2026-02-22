@@ -107,11 +107,11 @@ ICELAND — Checks
 END. OUTPUT JSON ONLY.`;
 
 function regionToJurisdiction(region: string): "Norway" | "EU" | "USA" | "Iceland" {
-  const r = (region || "").toLowerCase();
-  if (r === "norway") return "Norway";
-  if (r === "eu") return "EU";
-  if (r === "us") return "USA";
-  if (r === "iceland") return "Iceland";
+  const r = (region || "").toUpperCase();
+  if (r === "NO" || r === "NORWAY") return "Norway";
+  if (r === "EU") return "EU";
+  if (r === "US" || r === "USA") return "USA";
+  if (r === "IS" || r === "ICELAND") return "Iceland";
   return "USA";
 }
 
