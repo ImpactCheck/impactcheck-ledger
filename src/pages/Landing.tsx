@@ -6,14 +6,14 @@ import {
   ArrowRight, Shield, Zap, DollarSign, Sun, Moon,
   Building2, Scale, TrendingDown, FileCheck, Clock,
   ChevronRight, Leaf, BarChart3, CheckCircle2, Users,
-  Globe, Eye, Check, LogOut,
+  Globe, Eye, Check, LogOut, Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-
+import { TIERS, type SubscriptionTier } from "@/lib/subscription-tiers";
 const AUDIENCES = [
   {
     icon: Building2,
@@ -79,13 +79,11 @@ const TRUST_POINTS = [
   { icon: CheckCircle2, text: "Audit-grade documentation trail" },
 ];
 
-const PRO_FEATURES = [
-  "Unlimited projects",
-  "Full lifecycle carbon reports",
-  "Multi-region comparison",
-  "AI reduction strategies",
-  "Audit-grade PDF certificates",
-  "Priority support",
+const PRICING_TIERS: { key: SubscriptionTier; popular?: boolean }[] = [
+  { key: "free" },
+  { key: "company" },
+  { key: "investor", popular: true },
+  { key: "regulator" },
 ];
 
 export default function Landing() {
@@ -97,13 +95,15 @@ export default function Landing() {
   const goToDemo = () => navigate("/app");
   const goToAuth = () => navigate("/auth");
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (tier: SubscriptionTier) => {
     if (!user) {
       navigate("/auth");
       return;
     }
     try {
-      const { data, error } = await supabase.functions.invoke("create-checkout");
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { tier },
+      });
       if (error) throw error;
       if (data?.url) {
         window.open(data.url, "_blank");
@@ -300,7 +300,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Pricing ──────────────────────────────────────────────── */}
       <section id="pricing" className="py-20 md:py-28 bg-muted/30">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-14">
@@ -309,60 +308,72 @@ export default function Landing() {
               Start free, scale when ready
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Try ImpactCheck with up to 3 projects for free. Upgrade to Pro for unlimited access.
+              Choose the plan that fits your role. All paid plans include per-seat pricing.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-            {/* Free tier */}
-            <Card className="card-elevated border-0 rounded-3xl">
-              <CardContent className="p-8">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 font-mono">Free</p>
-                <div className="flex items-baseline gap-1 mb-1">
-                  <span className="text-4xl font-extrabold">$0</span>
-                  <span className="text-muted-foreground text-sm">/month</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-6">Up to 3 projects</p>
-                <ul className="space-y-2.5 mb-8">
-                  {["Up to 3 projects", "Full lifecycle reports", "Basic emission mapping", "Print/export PDF"].map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm">
-                      <Check className="h-4 w-4 text-primary shrink-0" />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button onClick={goToDemo} variant="outline" className="w-full rounded-xl h-11">
-                  Get Started Free
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Pro tier */}
-            <Card className="card-elevated border-0 rounded-3xl border-glow relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-green" />
-              <CardContent className="p-8">
-                <div className="flex items-center gap-2 mb-2">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary font-mono">Pro</p>
-                  <span className="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">Popular</span>
-                </div>
-                <div className="flex items-baseline gap-1 mb-1">
-                  <span className="text-4xl font-extrabold">$99</span>
-                  <span className="text-muted-foreground text-sm">/month</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-6">Unlimited projects</p>
-                <ul className="space-y-2.5 mb-8">
-                  {PRO_FEATURES.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm">
-                      <Check className="h-4 w-4 text-primary shrink-0" />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button onClick={handleCheckout} className="w-full rounded-xl h-11 glow-green">
-                  Subscribe to Pro
-                </Button>
-              </CardContent>
-            </Card>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {PRICING_TIERS.map(({ key, popular }) => {
+              const tier = TIERS[key];
+              const isPaid = tier.price > 0;
+              return (
+                <Card
+                  key={key}
+                  className={cn(
+                    "card-elevated border-0 rounded-3xl relative overflow-hidden",
+                    popular && "border-glow"
+                  )}
+                >
+                  {popular && <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-green" />}
+                  <CardContent className="p-7">
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className={cn(
+                        "text-[10px] font-bold uppercase tracking-widest font-mono",
+                        popular ? "text-primary" : "text-muted-foreground"
+                      )}>
+                        {tier.label}
+                      </p>
+                      {popular && (
+                        <span className="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">
+                          Popular
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-baseline gap-1 mb-1">
+                      <span className="text-3xl font-extrabold">${tier.price}</span>
+                      <span className="text-muted-foreground text-sm">/mo{isPaid ? " per seat" : ""}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-5">{tier.description}</p>
+                    <ul className="space-y-2 mb-6">
+                      {tier.features.map((f) => (
+                        <li key={f} className="flex items-center gap-2 text-sm">
+                          <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {tier.overflow && (
+                      <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-2.5 mb-4 text-[11px] text-muted-foreground">
+                        <Mail className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+                        <span>{tier.overflow}</span>
+                      </div>
+                    )}
+                    {isPaid ? (
+                      <Button
+                        onClick={() => handleCheckout(key)}
+                        className={cn("w-full rounded-xl h-10", popular && "glow-green")}
+                      >
+                        Subscribe
+                      </Button>
+                    ) : (
+                      <Button onClick={goToDemo} variant="outline" className="w-full rounded-xl h-10">
+                        Get Started Free
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </section>

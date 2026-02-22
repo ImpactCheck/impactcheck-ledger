@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { TIERS, type SubscriptionTier } from "@/lib/subscription-tiers";
 
 export type UseCase = "company" | "investor" | "regulator" | "other";
 
@@ -28,6 +29,7 @@ interface ProjectContextValue {
   project: ProjectConfig;
   setProject: (p: ProjectConfig) => void;
   updateProject: (partial: Partial<ProjectConfig>) => void;
+  syncTier: (tier: SubscriptionTier) => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -47,8 +49,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       return next;
     });
 
+  const syncTier = (tier: SubscriptionTier) => {
+    const uc = TIERS[tier].useCase;
+    setProjectState((prev) => (prev.useCase !== uc ? { ...prev, useCase: uc } : prev));
+  };
+
   return (
-    <ProjectContext.Provider value={{ project, setProject, updateProject }}>
+    <ProjectContext.Provider value={{ project, setProject, updateProject, syncTier }}>
       {children}
     </ProjectContext.Provider>
   );
@@ -58,6 +65,7 @@ const FALLBACK: ProjectContextValue = {
   project: DEFAULT_PROJECT,
   setProject: () => {},
   updateProject: () => {},
+  syncTier: () => {},
 };
 
 export function useProject() {

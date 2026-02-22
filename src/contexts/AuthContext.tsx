@@ -1,12 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { tierFromProductId, type SubscriptionTier } from "@/lib/subscription-tiers";
 
 interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;
   isPro: boolean;
+  subscriptionTier: SubscriptionTier;
   subscriptionEnd: string | null;
 }
 
@@ -23,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session: null,
     loading: true,
     isPro: false,
+    subscriptionTier: "free",
     subscriptionEnd: null,
   });
 
@@ -30,9 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase.functions.invoke("check-subscription");
       if (!error && data) {
+        const tier = tierFromProductId(data.product_id);
         setState((prev) => ({
           ...prev,
           isPro: data.subscribed ?? false,
+          subscriptionTier: data.subscribed ? tier : "free",
           subscriptionEnd: data.subscription_end ?? null,
         }));
       }
@@ -52,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         setTimeout(() => checkSubscription(), 0);
       } else {
-        setState((prev) => ({ ...prev, isPro: false, subscriptionEnd: null }));
+        setState((prev) => ({ ...prev, isPro: false, subscriptionTier: "free", subscriptionEnd: null }));
       }
     });
 

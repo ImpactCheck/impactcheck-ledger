@@ -3,12 +3,14 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, ArrowRight, Upload as UploadIcon, FileSpreadsheet,
   FileText as FileTextIcon, FileCode, File, Check, Loader2,
-  ChevronRight, Lightbulb, Info, Trash2,
+  ChevronRight, Lightbulb, Info, Trash2, Lock,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { TIERS } from "@/lib/subscription-tiers";
 import type { Document } from "@/contracts/impactcheck.v2";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -30,6 +32,8 @@ function fileIcon(fileType: string) {
 export default function Upload() {
   const navigate = useNavigate();
   const { project } = useProject();
+  const { subscriptionTier } = useAuth();
+  const canUpload = TIERS[subscriptionTier].uploads;
   const projectId = project.currentProjectId ?? "prj_1";
 
   const [docs, setDocs] = useState<Document[]>([]);
@@ -110,7 +114,16 @@ export default function Upload() {
         <div className="flex-1 min-w-0 space-y-4">
 
           {/* Upload area */}
-          <Card className="card-elevated border-0">
+          <Card className={cn("card-elevated border-0", !canUpload && "opacity-60 pointer-events-none relative")}>
+            {!canUpload && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl bg-background/80 backdrop-blur-sm">
+                <Lock className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="font-semibold text-sm">Upload requires a paid plan</p>
+                <Button onClick={() => navigate("/#pricing")} variant="outline" size="sm" className="mt-3 rounded-xl">
+                  View Plans
+                </Button>
+              </div>
+            )}
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>

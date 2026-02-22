@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Eye, EyeOff, ChevronDown, ChevronRight, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { TIERS } from "@/lib/subscription-tiers";
 import type { Report as ReportType, Recommendation } from "@/contracts/impactcheck.v2";
 import { AuditCertificate } from "@/components/AuditCertificate";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +35,8 @@ import { AssumptionsSection } from "@/components/report/AssumptionsSection";
 export default function Report() {
   const navigate = useNavigate();
   const { project } = useProject();
+  const { subscriptionTier } = useAuth();
+  const canExportPdf = TIERS[subscriptionTier].pdfExport;
   const projectId = project.currentProjectId;
   const [report, setReport] = useState<ReportType | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -211,7 +215,15 @@ export default function Report() {
             {showAll ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             {showAll ? "Use case layout" : "Show all sections"}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5 rounded-xl">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+            className="gap-1.5 rounded-xl"
+            disabled={!canExportPdf}
+            title={!canExportPdf ? "PDF export requires a paid plan" : undefined}
+          >
+            {!canExportPdf && <Lock className="h-3 w-3" />}
             <Printer className="h-3.5 w-3.5" /> Print / Export
           </Button>
           <AuditCertificate report={report} projectName={project.projectName} primaryRegion={primaryRegion} />
