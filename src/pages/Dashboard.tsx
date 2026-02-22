@@ -20,6 +20,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 import { REGION_LABELS } from "@/lib/regions";
+import {
+  useProjectStepCompletions,
+  getProgressFromCompletion,
+  type StepCompletion,
+} from "@/hooks/useStepCompletion";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -31,6 +36,8 @@ export default function Dashboard() {
   useEffect(() => {
     api.listProjects().then((p) => { setProjects(p); setLoading(false); });
   }, []);
+
+  const stepCompletions = useProjectStepCompletions(projects);
 
   const handleDelete = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation();
@@ -216,6 +223,7 @@ export default function Dashboard() {
                 <ProjectCard
                   key={proj.id}
                   proj={proj}
+                  completion={stepCompletions[proj.id]}
                   onOpen={openProject}
                   onDelete={handleDelete}
                 />
@@ -246,17 +254,19 @@ export default function Dashboard() {
 
 function ProjectCard({
   proj,
+  completion,
   onOpen,
   onDelete,
 }: {
   proj: Project;
+  completion?: StepCompletion;
   onOpen: (proj: Project) => void;
   onDelete: (e: React.MouseEvent, id: string) => void;
 }) {
   const regionLabel = REGION_LABELS[proj.primaryRegion] ?? proj.primaryRegion?.replace(/_/g, " ") ?? "—";
   const typeLabel = { business: "Business", investor: "Investor", regulator: "Regulator" }[proj.companyType] ?? proj.companyType;
-  const isCompleted = !!proj.baselineFootprintKgCO2e;
-  const progressPct = isCompleted ? 100 : 35; // Simple heuristic
+  const progressPct = completion ? getProgressFromCompletion(completion) : 0;
+  const isCompleted = progressPct >= 100;
 
   return (
     <Card
