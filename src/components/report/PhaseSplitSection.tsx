@@ -28,12 +28,12 @@ export function PhaseSplitSection({ phaseTotals, hero }: Props) {
   const colors = [EMBODIED_COLOR, OPERATIONAL_COLOR];
 
   return (
-    <Card className={`card-elevated border-0 print:border print:shadow-none ${hero ? "ring-1 ring-primary/20" : ""}`}>
+    <Card className={`card-elevated border-0 print:border print:shadow-none h-full flex flex-col ${hero ? "ring-1 ring-primary/20" : ""}`}>
       <CardHeader>
         <CardTitle className={hero ? "text-xl" : "text-lg"}>Embodied vs Operational Split</CardTitle>
         <CardDescription>Embodied carbon applies in Year 1 only (alongside operational). Subsequent years incur operational carbon only.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col justify-center">
         <div className="h-[220px] relative">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
