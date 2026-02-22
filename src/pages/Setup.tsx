@@ -13,10 +13,10 @@ import { cn } from "@/lib/utils";
 
 // Supported regions for home region and simulation/comparison (carbon footprint + compliance)
 const REGIONS = [
-  { value: "eu",      label: "EU (mixed grid — ~350 g/kWh)" },
-  { value: "norway",  label: "Norway (Hydro — ~10 g/kWh)" },
-  { value: "us",      label: "US (mixed grid — ~380 g/kWh)" },
-  { value: "iceland", label: "Iceland (Geothermal — ~15 g/kWh)" },
+  { value: "EU",  label: "EU (mixed grid — ~350 g/kWh)" },
+  { value: "NO",  label: "Norway (Hydro — ~10 g/kWh)" },
+  { value: "US",  label: "US (mixed grid — ~380 g/kWh)" },
+  { value: "IS",  label: "Iceland (Geothermal — ~15 g/kWh)" },
 ];
 
 const REGION_CARBON: Record<string, string> = {

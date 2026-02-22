@@ -762,12 +762,12 @@ function fallbackEstimate(projectId: string, act: any, factor: any, confidence: 
 
 function mapRegionToClimatiq(region: string): string {
   const map: Record<string, string> = {
-    eu: "EU",
-    norway: "NO",
-    us: "US",
-    iceland: "IS",
+    eu: "EU", "EU": "EU",
+    norway: "NO", "NO": "NO",
+    us: "US", "US": "US",
+    iceland: "IS", "IS": "IS",
   };
-  return map[region?.toLowerCase()] || "GLOBAL";
+  return map[region] || map[region?.toLowerCase()] || "GLOBAL";
 }
 
 // ─── Unit mappers ───────────────────────────────────────

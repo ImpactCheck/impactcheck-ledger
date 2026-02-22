@@ -515,11 +515,12 @@ Return ONLY a JSON object with the converted parameters (e.g. {"energy": 100, "e
 // ─── Region mapping ─────────────────────────────────────
 
 const REGION_MAP: Record<string, string> = {
-  us: "US", eu: "EU", uk: "GB", china: "CN", india: "IN", japan: "JP",
-  germany: "DE", france: "FR", canada: "CA", australia: "AU", brazil: "BR",
-  south_korea: "KR", mexico: "MX", indonesia: "ID", south_africa: "ZA",
-  saudi_arabia: "SA", uae: "AE", norway: "NO", sweden: "SE", finland: "FI",
-  denmark: "DK", iceland: "IS", singapore: "SG", taiwan: "TW", global: "GLOBAL",
+  us: "US", "US": "US", eu: "EU", "EU": "EU", uk: "GB",
+  china: "CN", india: "IN", japan: "JP", germany: "DE", france: "FR",
+  canada: "CA", australia: "AU", brazil: "BR", south_korea: "KR",
+  mexico: "MX", indonesia: "ID", south_africa: "ZA", saudi_arabia: "SA",
+  uae: "AE", norway: "NO", "NO": "NO", sweden: "SE", finland: "FI",
+  denmark: "DK", iceland: "IS", "IS": "IS", singapore: "SG", taiwan: "TW", global: "GLOBAL",
 };
 
 function mapRegionToClimatiq(region: string): string {
