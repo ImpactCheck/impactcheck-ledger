@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Eye, EyeOff, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { api } from "@/api";
@@ -249,6 +249,21 @@ export default function Report() {
           <p className="text-muted-foreground text-sm mt-0.5">Full lifecycle carbon assessment per GHG Protocol.</p>
         </div>
         <div className="flex items-center gap-2">
+          {hasComparisonRegions && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!projectId) return;
+                startSim(() => api.startSimulation(projectId));
+              }}
+              disabled={simRunning}
+              className="gap-1.5 rounded-xl"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${simRunning ? "animate-spin" : ""}`} />
+              Re-run Simulations
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
