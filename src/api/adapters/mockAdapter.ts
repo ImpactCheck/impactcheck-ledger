@@ -7,7 +7,6 @@ import type {
   ActivityEstimate,
   Report,
   Recommendation,
-  DeploymentPlan,
 } from "@/contracts/impactcheck.v2";
 
 // ─── Deterministic hash ───────────────────────────────────────────────
@@ -365,30 +364,5 @@ export function createMockAdapter(): ImpactcheckClient {
       };
     },
 
-    // Deploy
-    async deployCrusoe() {
-      return {
-        projectId: "prj_1",
-        status: "running" as const,
-        logs: [
-          "[2026-02-15 10:00] Deployment initiated",
-          "[2026-02-15 10:01] Validating project configuration…",
-          "[2026-02-15 10:02] Provisioning Crusoe Cloud GPU cluster…",
-        ],
-      };
-    },
-    async getDeploymentStatus() {
-      return {
-        projectId: "prj_1",
-        status: "succeeded" as const,
-        logs: [
-          "[2026-02-15 10:00] Deployment initiated",
-          "[2026-02-15 10:01] Validating project configuration…",
-          "[2026-02-15 10:02] Provisioning Crusoe Cloud GPU cluster…",
-          "[2026-02-15 10:05] Cluster online — audit certificate deployed",
-          "[2026-02-15 10:06] Deployment succeeded",
-        ],
-      };
-    },
   };
 }

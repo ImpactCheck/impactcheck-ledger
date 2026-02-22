@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, TrendingDown, Loader2, Check, Lock, Pencil } from "lucide-react";
+import { ArrowLeft, TrendingDown, Loader2, Check, Lock, Pencil } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { api } from "@/api";
@@ -16,7 +16,6 @@ export default function Recommendations() {
   const navigate = useNavigate();
   const { project } = useProject();
   const projectId = project.currentProjectId ?? "prj_1";
-  const showDeploy = project.deployOptIn;
 
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -190,11 +189,6 @@ export default function Recommendations() {
         <Button variant="outline" onClick={() => navigate("/report")} className="gap-2 rounded-xl">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
-        {showDeploy && (
-          <Button onClick={() => navigate("/deploy")} disabled={!finalized} className="gap-2 rounded-xl">
-            Continue <ArrowRight className="h-4 w-4" />
-          </Button>
-        )}
       </div>
     </div>
   );

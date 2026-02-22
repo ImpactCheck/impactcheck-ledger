@@ -9,7 +9,6 @@ export interface StepCompletion {
   mapping: boolean;
   report: boolean;
   recommendations: boolean;
-  deploy: boolean;
 }
 
 const EMPTY: StepCompletion = {
@@ -19,7 +18,6 @@ const EMPTY: StepCompletion = {
   mapping: false,
   report: false,
   recommendations: false,
-  deploy: false,
 };
 
 /**
@@ -58,7 +56,6 @@ export function useStepCompletion(): StepCompletion {
         mapping: hasEstimates,
         report: hasEstimates, // Report can be generated once estimates exist
         recommendations: hasEstimates,
-        deploy: hasEstimates,
       });
     }
 

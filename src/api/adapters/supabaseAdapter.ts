@@ -8,7 +8,6 @@ import type {
   ActivityEstimate,
   Report,
   Recommendation,
-  DeploymentPlan,
 } from "@/contracts/impactcheck.v2";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
@@ -265,14 +264,6 @@ export function createSupabaseAdapter(): ImpactcheckClient {
       });
     },
 
-    // ─── Deploy ────────────────────────────────────────────
-    async deployCrusoe(projectId) {
-      return invokeFunction("deploy-crusoe", { projectId });
-    },
-
-    async getDeploymentStatus(projectId) {
-      return invokeFunction("deploy-crusoe", { projectId, action: "status" });
-    },
   };
 }
 

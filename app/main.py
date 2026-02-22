@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init_db
 from app.jobs.runner import get_job_runner
-from app.routes import activities, deploy, documents, jobs, mapping, projects, recommendations, reports
+from app.routes import activities, documents, jobs, mapping, projects, recommendations, reports
 from app.settings import get_settings
 
 
@@ -36,7 +36,6 @@ app.include_router(activities.router)
 app.include_router(mapping.router)
 app.include_router(reports.router)
 app.include_router(recommendations.router)
-app.include_router(deploy.router)
 app.include_router(jobs.router)
 
 

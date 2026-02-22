@@ -199,7 +199,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <p className="text-4xl font-bold font-mono">{aiInfraCount}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">Deploy-ready</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">AI projects</p>
                 </CardContent>
               </Card>
 

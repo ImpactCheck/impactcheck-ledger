@@ -8,6 +8,3 @@ verify_jwt = false
 
 [functions.recommendations]
 verify_jwt = false
-
-[functions.deploy-crusoe]
-verify_jwt = false
