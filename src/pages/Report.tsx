@@ -69,6 +69,7 @@ export default function Report() {
 
   const primaryRegion = report ? Object.keys(report.totalsByRegion)[0] ?? "" : "";
   const categories = report?.categoryBreakdownByRegion?.[primaryRegion] ?? [];
+  const phaseTotals = report?.phaseTotalsByRegion?.[primaryRegion] ?? { embodied: 0, operational: 0 };
   const regionCompareData = report
     ? Object.entries(report.totalsByRegion).map(([region, total]) => ({ region: region.replace(/_/g, " "), total }))
     : [];
@@ -96,7 +97,7 @@ export default function Report() {
         case "executive-summary":
           return <ExecutiveSummarySection report={report} primaryRegion={primaryRegion} hero={isHero} />;
         case "phase-split":
-          return <PhaseSplitSection categories={categories} hero={isHero} />;
+          return <PhaseSplitSection phaseTotals={phaseTotals} hero={isHero} />;
         case "region-map":
           return <RegionMapSection totalsByRegion={report.totalsByRegion} hero={isHero} />;
         case "hotspots":

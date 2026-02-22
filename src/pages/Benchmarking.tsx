@@ -63,23 +63,17 @@ export default function Benchmarking() {
     return Object.keys(report.totalsByRegion)[0] ?? project.primaryRegion ?? "";
   }, [report, project.primaryRegion]);
 
-  const primaryTotal = useMemo(() => {
-    const fromReport = report?.totalsByRegion?.[primaryRegion] ?? 0;
-    if (fromReport > 0) return fromReport;
-    // Fallback: sum estimates for primary region when report has no totals
-    const pr = project.primaryRegion ?? "";
-    return estimates.reduce(
-      (sum, e) =>
-        sum + (e.region === primaryRegion || (!e.region && primaryRegion === pr) ? e.co2eKg : 0),
-      0
-    );
-  }, [report, primaryRegion, project.primaryRegion, estimates]);
+  /* Computed yearly total: sum of ALL estimates (matches Emissions page "Total CO₂e / yr") */
+  const computedYearlyTotal = useMemo(
+    () => estimates.reduce((s, e) => s + e.co2eKg, 0),
+    [estimates]
+  );
   const renewablePct = RENEWABLE_MIX[primaryRegion] ?? 20;
   const embodiedPct = estimates.length > 0 ? 38 : 0; // industry baseline comparison
 
   /* Carbon intensity: total CO₂e / number of estimates as proxy for activity count */
   const projectIntensity = estimates.length > 0
-    ? parseFloat((primaryTotal / 1000 / estimates.length).toFixed(3))
+    ? parseFloat((computedYearlyTotal / 1000 / estimates.length).toFixed(3))
     : 0;
 
   const benchmarkData = [
@@ -87,13 +81,13 @@ export default function Benchmarking() {
     ...INDUSTRY_BENCHMARKS,
   ];
 
-  /* Trajectory chart: baseline (flat) + current point */
-  const baselineKg = project.baselineFootprintKgCO2e ?? primaryTotal * 1.15;
+  /* Trajectory chart: baseline (flat) + computed yearly actual */
+  const baselineKg = project.baselineFootprintKgCO2e ?? computedYearlyTotal * 1.15;
   const trajectoryData = [
     { quarter: "Q1 Baseline", actual: baselineKg / 1000, baseline: baselineKg / 1000 },
     { quarter: "Q2",          actual: baselineKg / 1000 * 0.95, baseline: baselineKg / 1000 },
-    { quarter: "Q3",          actual: primaryTotal / 1000 * 0.9,  baseline: baselineKg / 1000 },
-    { quarter: "Q4 Current",  actual: primaryTotal / 1000, baseline: baselineKg / 1000 },
+    { quarter: "Q3",          actual: computedYearlyTotal / 1000 * 0.9,  baseline: baselineKg / 1000 },
+    { quarter: "Q4 Current",  actual: computedYearlyTotal / 1000, baseline: baselineKg / 1000 },
   ];
 
   const aiTip = renewablePct >= 80
@@ -267,11 +261,11 @@ export default function Benchmarking() {
               </div>
             </div>
 
-            {/* Total */}
-            {primaryTotal > 0 && (
+            {/* Computed yearly total (matches Emissions page) */}
+            {computedYearlyTotal > 0 && (
               <div className="pt-3 border-t border-border">
-                <p className="text-[10px] text-muted-foreground">Total lifecycle carbon</p>
-                <p className="text-lg font-bold font-mono text-primary">{formatTonnes(primaryTotal)} t</p>
+                <p className="text-[10px] text-muted-foreground">Computed yearly total</p>
+                <p className="text-lg font-bold font-mono text-primary">{formatTonnes(computedYearlyTotal)} t</p>
               </div>
             )}
           </div>

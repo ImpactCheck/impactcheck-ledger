@@ -209,10 +209,25 @@ export function createMockAdapter(): ImpactcheckClient {
       return { text: act?.text ?? e.activityId, co2eKg: e.co2eKg, phase: getActivityPhase(act?.category) as "embodied" | "operational" };
     });
 
+    const phaseTotalsByRegion: Record<string, { embodied: number; operational: number }> = {};
+    for (const region of regions) {
+      const regionEstimates = buildEstimates(region);
+      let embodied = 0;
+      let operational = 0;
+      for (const e of regionEstimates) {
+        const act = storedActivities.find((a) => a.id === e.activityId);
+        const phase = getActivityPhase(act?.category);
+        if (phase === "embodied") embodied += e.co2eKg;
+        else operational += e.co2eKg;
+      }
+      phaseTotalsByRegion[region] = { embodied, operational };
+    }
+
     return {
       projectId,
       totalsByRegion: totals,
       categoryBreakdownByRegion: breakdowns,
+      phaseTotalsByRegion,
       deltaVsBaselineKg,
       compliance: {
         us: {
