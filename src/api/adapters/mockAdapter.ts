@@ -293,6 +293,10 @@ export function createMockAdapter(): ImpactcheckClient {
     async listDocuments() {
       return [...storedDocs];
     },
+    async deleteDocument(_projectId, documentId) {
+      const idx = storedDocs.findIndex(d => d.id === documentId);
+      if (idx !== -1) storedDocs.splice(idx, 1);
+    },
 
     // Extract
     async startExtract() {
@@ -332,6 +336,15 @@ export function createMockAdapter(): ImpactcheckClient {
       return buildEstimates(getProject("prj_1").primaryRegion);
     },
 
+    // Simulation
+    async startSimulation() {
+      jobPollCount["job_sim_1"] = 0;
+      return advanceJob("job_sim_1", "simulation");
+    },
+    async getSimulationEstimates() {
+      return [];
+    },
+
     // Report
     async getReport(projectId) {
       return buildReport(projectId);
@@ -348,33 +361,27 @@ export function createMockAdapter(): ImpactcheckClient {
           id: "rec_1",
           projectId: "prj_1",
           title: "Switch to low-carbon concrete",
-          summary:
-            "Replace standard concrete with low-carbon mix to reduce embodied emissions by ~50% on concrete line items.",
+          summary: "Replace standard concrete with low-carbon mix to reduce embodied emissions by ~50% on concrete line items.",
           expectedDeltaKg: -2_700_000,
           constraints: ["Supplier availability in Texas region"],
-          strategyDraftText:
-            "Transition 100% of concrete procurement to verified low-carbon suppliers. Expected reduction: 2,700 t CO₂e.",
+          strategyDraftText: "Transition 100% of concrete procurement to verified low-carbon suppliers. Expected reduction: 2,700 t CO₂e.",
         },
         {
           id: "rec_2",
           projectId: "prj_1",
           title: "Procure renewable energy PPAs",
-          summary:
-            "Offset grid emissions with Power Purchase Agreements for wind/solar in the ERCOT region.",
+          summary: "Offset grid emissions with Power Purchase Agreements for wind/solar in the ERCOT region.",
           expectedDeltaKg: -1_500_000,
           constraints: ["Long-term PPA contract negotiation required"],
-          strategyDraftText:
-            "Execute 10-year PPA with regional wind farm. Projected annual offset: 1,500 t CO₂e.",
+          strategyDraftText: "Execute 10-year PPA with regional wind farm. Projected annual offset: 1,500 t CO₂e.",
         },
         {
           id: "rec_3",
           projectId: "prj_1",
           title: "Optimize PUE to 1.10",
-          summary:
-            "Invest in advanced liquid cooling and hot aisle containment to reduce PUE from 1.20 to 1.10.",
+          summary: "Invest in advanced liquid cooling and hot aisle containment to reduce PUE from 1.20 to 1.10.",
           expectedDeltaKg: -800_000,
-          strategyDraftText:
-            "Deploy rear-door heat exchangers and upgrade CRAH units. Target PUE 1.10 within 18 months.",
+          strategyDraftText: "Deploy rear-door heat exchangers and upgrade CRAH units. Target PUE 1.10 within 18 months.",
         },
       ];
     },

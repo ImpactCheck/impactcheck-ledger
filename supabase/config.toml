@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.customer-portal]
 verify_jwt = false
+
+[functions.simulate-regions]
+verify_jwt = false

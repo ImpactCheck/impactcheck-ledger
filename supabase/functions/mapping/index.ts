@@ -76,10 +76,9 @@ async function runMapping(
       return;
     }
 
-    // Get project for region info (primary + comparison regions for simulation)
+    // Get project for region info — only process primary region (comparisons are simulated at report time)
     const { data: proj } = await supabase.from("projects").select("primary_region, comparison_regions").eq("id", projectId).single();
-    const projectRegions = [proj?.primary_region, ...(proj?.comparison_regions || [])].filter(Boolean);
-    const regionsToEstimate = projectRegions.length > 0 ? projectRegions : ["us"];
+    const regionsToEstimate = [proj?.primary_region || "us"];
 
     await supabase.from("jobs").update({ progress: 10, stage: "searching_factors", message: `Searching factors for ${activities.length} activities…` }).eq("id", jobId);
 
