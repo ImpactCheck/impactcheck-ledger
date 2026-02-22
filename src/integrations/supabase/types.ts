@@ -335,6 +335,45 @@ export type Database = {
           },
         ]
       }
+      simulation_estimates: {
+        Row: {
+          activity_id: string
+          co2e_kg: number
+          confidence: number
+          created_at: string
+          id: string
+          input_used: Json
+          matched_factor: Json
+          project_id: string
+          region: string | null
+          simulation_region: string
+        }
+        Insert: {
+          activity_id: string
+          co2e_kg?: number
+          confidence?: number
+          created_at?: string
+          id?: string
+          input_used?: Json
+          matched_factor?: Json
+          project_id: string
+          region?: string | null
+          simulation_region: string
+        }
+        Update: {
+          activity_id?: string
+          co2e_kg?: number
+          confidence?: number
+          created_at?: string
+          id?: string
+          input_used?: Json
+          matched_factor?: Json
+          project_id?: string
+          region?: string | null
+          simulation_region?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

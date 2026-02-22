@@ -44,6 +44,10 @@ export interface ImpactcheckClient {
   startMapping(projectId: string): Promise<JobStatus>;
   getEstimates(projectId: string): Promise<ActivityEstimate[]>;
 
+  // Simulation (comparison regions)
+  startSimulation(projectId: string): Promise<JobStatus>;
+  getSimulationEstimates(projectId: string): Promise<ActivityEstimate[]>;
+
   // Report
   getReport(projectId: string): Promise<Report>;
 

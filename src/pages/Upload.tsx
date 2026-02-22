@@ -93,7 +93,7 @@ export default function Upload() {
   };
 
   const hasDocs = docs.length > 0;
-  const readyDocs = docs.filter((d) => d.status === "ready" || d.status === "processed").length;
+  const readyDocs = docs.filter((d) => d.status === "ready").length;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in-up">

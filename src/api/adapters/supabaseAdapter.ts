@@ -220,11 +220,28 @@ export function createSupabaseAdapter(): ImpactcheckClient {
       return (data || []).map(mapEstimate);
     },
 
+    // ─── Simulation ──────────────────────────────────────────
+    async startSimulation(projectId) {
+      return invokeFunction("simulate-regions", { projectId });
+    },
+
+    async getSimulationEstimates(projectId) {
+      const { data, error } = await supabase
+        .from("simulation_estimates")
+        .select("*")
+        .eq("project_id", projectId);
+      if (error) throw error;
+      return (data || []).map(mapEstimate);
+    },
+
     // ─── Report ────────────────────────────────────────────
     async getReport(projectId) {
       const project = await this.getProject(projectId);
       const estimates = await this.getEstimates(projectId);
       const activities = await this.getActivities(projectId);
+
+      // Also fetch simulation estimates for comparison regions
+      const simEstimates = await this.getSimulationEstimates(projectId);
 
       const regions = [project.primaryRegion, ...(project.comparisonRegions || [])].filter(Boolean);
       const regionSet = new Set(regions);
@@ -243,7 +260,7 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         breakdowns[primaryRegion] = [];
       }
 
-      // Aggregate estimates: match by region, or attribute orphans to primary region
+      // Aggregate home-region estimates
       for (const e of estimates) {
         const region = (e.region && regionSet.has(e.region)) ? e.region : primaryRegion;
         totals[region] = (totals[region] ?? 0) + e.co2eKg;
@@ -256,14 +273,29 @@ export function createSupabaseAdapter(): ImpactcheckClient {
         breakdowns[region] = existing;
       }
 
+      // Aggregate simulation estimates (comparison regions)
+      for (const e of simEstimates) {
+        const region = e.region || primaryRegion;
+        if (!totals[region]) totals[region] = 0;
+        if (!breakdowns[region]) breakdowns[region] = [];
+        totals[region] += e.co2eKg;
+
+        const cat = (e.matchedFactor?.name && String(e.matchedFactor.name).trim()) || "Other";
+        const existing = breakdowns[region];
+        const idx = existing.findIndex((x) => x.category === cat);
+        if (idx >= 0) existing[idx].co2eKg += e.co2eKg;
+        else existing.push({ category: cat, co2eKg: e.co2eKg });
+      }
+
       // Sort category breakdown by co2eKg descending
       for (const region of Object.keys(breakdowns)) {
         breakdowns[region].sort((a, b) => b.co2eKg - a.co2eKg);
       }
 
-      // Phase totals by region: use activity category (from extraction) for embodied/operational
+      // Phase totals by region
       const phaseTotals: Record<string, { embodied: number; operational: number }> = {};
-      for (const e of estimates) {
+      const allEstimates = [...estimates, ...simEstimates];
+      for (const e of allEstimates) {
         const region = (e.region && regionSet.has(e.region)) ? e.region : primaryRegion;
         const act = activities.find((a) => a.id === e.activityId);
         const phase = getActivityPhase(act?.category);

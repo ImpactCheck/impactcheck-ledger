@@ -8,6 +8,8 @@ import type { Report as ReportType, Recommendation } from "@/contracts/impactche
 import { AuditCertificate } from "@/components/AuditCertificate";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import JobProgressCard from "@/components/JobProgressCard";
+import { useJobPoller } from "@/hooks/useJobPoller";
 import {
   getReportLayout,
   SECTION_LABELS,
@@ -41,12 +43,17 @@ export default function Report() {
   const [showAll, setShowAll] = useState(false);
   const [collapsedOverrides, setCollapsedOverrides] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    if (!projectId) {
-      setLoading(false);
-      setError("No project selected. Please set up a project first.");
-      return;
-    }
+  const hasComparisonRegions = (project.comparisonRegions?.length ?? 0) > 0;
+
+  // Simulation job poller — only used when comparison regions exist
+  const { job: simJob, start: startSim, isRunning: simRunning } = useJobPoller({
+    projectId: projectId ?? undefined,
+    jobType: "simulation",
+    onSuccess: () => loadReport(),
+  });
+
+  const loadReport = useCallback(() => {
+    if (!projectId) return;
     setLoading(true);
     setError(null);
     api
@@ -54,7 +61,6 @@ export default function Report() {
       .then((r) => {
         setReport(r);
         setLoading(false);
-        // Fetch recommendations in background (can take 10–30s due to LLM)
         api.generateRecommendations(projectId).then(setRecommendations).catch(() => setRecommendations([]));
       })
       .catch((e) => {
@@ -62,6 +68,47 @@ export default function Report() {
         setLoading(false);
       });
   }, [projectId]);
+
+  // On mount: if comparison regions exist, check for simulation job; otherwise load report directly
+  useEffect(() => {
+    if (!projectId) {
+      setLoading(false);
+      setError("No project selected. Please set up a project first.");
+      return;
+    }
+
+    if (!hasComparisonRegions) {
+      // No comparisons — load report immediately
+      loadReport();
+      return;
+    }
+
+    // Check if there's already a succeeded simulation job (recent)
+    api.getActiveJob(projectId, "simulation").then((activeJob) => {
+      if (activeJob) {
+        // There's an active (running/queued) simulation — poller will handle it via auto-resume
+        setLoading(false);
+      } else {
+        // No active job — check if we already have simulation data
+        api.getSimulationEstimates(projectId).then((simEstimates) => {
+          if (simEstimates.length > 0) {
+            // Already have simulation data — just load the report
+            loadReport();
+          } else {
+            // No simulation data — trigger simulation
+            setLoading(false);
+            startSim(() => api.startSimulation(projectId));
+          }
+        }).catch(() => {
+          // Fallback: trigger simulation
+          setLoading(false);
+          startSim(() => api.startSimulation(projectId));
+        });
+      }
+    }).catch(() => {
+      loadReport();
+    });
+  }, [projectId, hasComparisonRegions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const useCase = project.useCase;
   const hasMultipleRegions = report ? Object.keys(report.totalsByRegion).length > 1 : false;
@@ -125,7 +172,6 @@ export default function Report() {
 
     if (!content) return null;
 
-    // Collapsible wrapper
     if (section.collapsed !== undefined || collapsedOverrides[section.id] !== undefined) {
       return (
         <div key={section.id}>
@@ -143,6 +189,22 @@ export default function Report() {
 
     return <div key={section.id}>{content}</div>;
   };
+
+  // Show simulation progress if running
+  if (simRunning && simJob) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
+        <div>
+          <p className="step-number mb-1">Step 05</p>
+          <h1 className="text-2xl font-bold tracking-tight">Carbon Audit Final Report</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            Running regional simulations for {project.comparisonRegions?.join(", ")}…
+          </p>
+        </div>
+        <JobProgressCard job={simJob} type="simulation" />
+      </div>
+    );
+  }
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">

@@ -90,6 +90,33 @@ const MAPPING_STEPS: StepDef[] = [
   },
 ];
 
+const SIMULATION_STEPS: StepDef[] = [
+  {
+    keys: ["loading_activities"],
+    label: "Loading",
+    icon: <FileText className="h-4 w-4" />,
+    defaultDescription: "Loading activities for regional simulation…",
+  },
+  {
+    keys: ["searching_factors"],
+    label: "Searching factors",
+    icon: <Search className="h-4 w-4" />,
+    defaultDescription: "Finding emission factors for comparison regions…",
+  },
+  {
+    keys: ["estimating"],
+    label: "Simulating",
+    icon: <Cpu className="h-4 w-4" />,
+    defaultDescription: "Computing CO₂e for comparison regions…",
+  },
+  {
+    keys: ["done"],
+    label: "Complete",
+    icon: <Check className="h-4 w-4" />,
+    defaultDescription: "Regional simulation finished.",
+  },
+];
+
 // ─── Elapsed-time hook ────────────────────────────────────────────────────────
 
 function useElapsedSeconds(job: JobStatus | null): number {
@@ -118,11 +145,11 @@ function formatElapsed(seconds: number): string {
 
 interface JobProgressCardProps {
   job: JobStatus;
-  type: "extract" | "mapping";
+  type: "extract" | "mapping" | "simulation";
 }
 
 export default function JobProgressCard({ job, type }: JobProgressCardProps) {
-  const steps = type === "extract" ? EXTRACT_STEPS : MAPPING_STEPS;
+  const steps = type === "extract" ? EXTRACT_STEPS : type === "simulation" ? SIMULATION_STEPS : MAPPING_STEPS;
   const stageKey = job.stage ?? "";
   const elapsed = useElapsedSeconds(job);
 
