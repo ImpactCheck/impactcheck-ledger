@@ -1,74 +1,104 @@
 
 
-## Benchmarking: Direct Estimates Comparison (No Report)
+# Fix: Report Generation Stuck on Loading
 
-### Problem
-The Benchmarking page currently calls `api.getReport()`, which triggers slow compliance calls and builds a full report object. Benchmarking only needs to compare raw estimate totals across regions -- home region estimates vs simulation estimates for comparison regions.
+## Problem
+When navigating to the Report page, the "Building your carbon report..." spinner appears indefinitely. The root cause is in the `getReport` method in the Supabase adapter, which sequentially calls:
 
-### Revised Approach
+1. `getProject(projectId)` -- fast
+2. `getEstimates(projectId)` -- fast
+3. `getActivities(projectId)` -- fast
+4. `getSimulationEstimates(projectId)` -- fast
+5. `invokeCompliance(projectId)` -- calls the `compliance` edge function, which makes **sequential Gemini API calls for each region** (primary + all comparison regions). With 3 regions, that's 3 back-to-back Gemini requests, which can easily exceed the edge function timeout (60 seconds).
 
-Remove the `getReport` call entirely. Instead:
+After `getReport` resolves, it also fires `generateRecommendations(projectId)` which makes another Gemini call.
 
-1. Load home-region estimates from `estimates` table directly (already done via `api.getEstimates`).
-2. If comparison regions exist, trigger the simulation job and show progress via `JobProgressCard`.
-3. Once simulation completes, load simulation estimates via `api.getSimulationEstimates`.
-4. Aggregate totals per region from both datasets and display the benchmarking charts.
+Additionally, the `compliance` edge function has a bug: its `regionToJurisdiction` function still uses old lowercase region names (`"norway"`, `"iceland"`) but the database now stores ISO codes (`"NO"`, `"IS"`), so jurisdiction detection defaults to "USA" for all regions.
 
-### Changes
+## Solution
 
-#### `src/pages/Benchmarking.tsx`
+### 1. Decouple compliance from report loading
+Move the compliance call out of `getReport` so the report renders immediately with core data. Compliance and recommendations load asynchronously in the background.
 
-- Remove the `getReport` call and the `report` state entirely.
-- Add `useJobPoller` with `jobType: "simulation"` for progress tracking.
-- On mount:
-  - Load home-region estimates via `api.getEstimates(projectId)`.
-  - Check if comparison regions exist (from `project.comparisonRegions`).
-  - If yes: check for existing simulation estimates; if empty, trigger `api.startSimulation(projectId)` and show `JobProgressCard`.
-  - Once simulation completes, load simulation estimates via `api.getSimulationEstimates(projectId)`.
-- Compute all benchmarking metrics (totals per region, intensity, phase splits) directly from the raw estimate arrays instead of relying on a report object.
-- Add a new **Region Comparison bar chart** showing total CO2e per region side by side (home vs each comparison region).
-- Keep the existing carbon intensity benchmark chart and trajectory chart, but derive data from estimates + activities instead of the report.
+**File: `src/api/adapters/supabaseAdapter.ts`**
+- Remove the `invokeCompliance(projectId)` call from inside `getReport`
+- Return a default/empty compliance object from `getReport`
 
-#### Data Flow
+**File: `src/pages/Report.tsx`**
+- Load compliance data separately after the report renders (non-blocking)
+- Load recommendations separately (already partially done, but tighten error handling)
+- Add a timeout fallback so the page never hangs indefinitely
 
-```text
-User navigates to /benchmarking
-        |
-        v
-  Load home estimates (api.getEstimates)
-  Load activities (for phase categorization)
-        |
-        v
-  Has comparison regions?
-   /            \
-  No             Yes
-  |               |
-  v               v
-Show charts    Check for simulation data
-with home        |
-data only    Has data? -----> Load simulation estimates --> Show charts
-              |
-              No data --> Start simulation --> Show JobProgressCard
-                                                    |
-                                              Completed --> Load simulation estimates --> Show charts
+### 2. Fix region code mapping in compliance edge function
+**File: `supabase/functions/compliance/index.ts`**
+- Update `regionToJurisdiction` to handle ISO codes: `"NO"` maps to Norway, `"IS"` maps to Iceland, `"US"` maps to USA, `"EU"` maps to EU
+
+### 3. Add compliance function to config.toml
+The compliance function is missing from `supabase/config.toml`, meaning JWT verification defaults may apply.
+
+**File: `supabase/config.toml`**
+- Add `[functions.compliance]` with `verify_jwt = false`
+
+## Technical Details
+
+### Changes to `src/pages/Report.tsx`
+
+```typescript
+// Load report data (fast, no Gemini calls)
+const loadReport = useCallback(() => {
+  if (!projectId) return;
+  setLoading(true);
+  setError(null);
+  api.getReport(projectId)
+    .then((r) => {
+      setReport(r);
+      setLoading(false);
+      // Load compliance and recommendations in background
+      api.getCompliance(projectId)
+        .then((c) => {
+          setReport(prev => prev ? { ...prev, compliance: { ...prev.compliance, byRegion: c.byRegion } } : prev);
+        })
+        .catch(() => {});
+      api.generateRecommendations(projectId)
+        .then(setRecommendations)
+        .catch(() => setRecommendations([]));
+    })
+    .catch((e) => {
+      setError(e.message ?? "Failed to load report");
+      setLoading(false);
+    });
+}, [projectId]);
 ```
 
-#### Metrics Derived from Raw Estimates
+### Changes to `src/api/adapters/supabaseAdapter.ts`
 
-- **Total CO2e per region**: Sum `co2e_kg` grouped by region from estimates + simulation_estimates.
-- **Phase totals** (embodied vs operational): Categorize by looking up each estimate's activity category (same `getActivityPhase` logic).
-- **Carbon intensity**: Total CO2e / activity count per region.
-- **Region comparison chart**: New horizontal bar chart with one bar per region (home + comparison regions).
+Remove `invokeCompliance` from `getReport` and return static compliance defaults so the report renders immediately.
 
-#### New Chart: Region Comparison
+### Changes to `supabase/functions/compliance/index.ts`
 
-A new bar chart comparing total emissions across all regions. Each bar represents a region, colored distinctly. The home region is highlighted. This replaces the need for report-level `totalsByRegion`.
+```typescript
+function regionToJurisdiction(region: string): "Norway" | "EU" | "USA" | "Iceland" {
+  const r = (region || "").toUpperCase();
+  if (r === "NO" || r === "NORWAY") return "Norway";
+  if (r === "EU") return "EU";
+  if (r === "US" || r === "USA") return "USA";
+  if (r === "IS" || r === "ICELAND") return "Iceland";
+  return "USA";
+}
+```
 
-### Files to Modify
+### Changes to `supabase/config.toml`
 
-- `src/pages/Benchmarking.tsx` -- Full rework: remove `getReport`, add simulation trigger + progress, compute metrics from raw estimates, add region comparison chart.
+```toml
+[functions.compliance]
+verify_jwt = false
+```
 
-### No Other Files Changed
-
-The API client already has `getEstimates`, `getSimulationEstimates`, and `startSimulation`. The `JobProgressCard` component already supports the "simulation" job type. No backend changes needed.
+## Summary of Changes
+| File | Change |
+|------|--------|
+| `src/api/adapters/supabaseAdapter.ts` | Remove `invokeCompliance` from `getReport` |
+| `src/pages/Report.tsx` | Load compliance asynchronously after report renders |
+| `supabase/functions/compliance/index.ts` | Fix ISO region code mapping |
+| `supabase/config.toml` | Add compliance function config |
 
