@@ -254,12 +254,12 @@ export default function Benchmarking() {
                   <BarChart data={benchmarkData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
                     <XAxis type="number" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false}
-                      tickFormatter={(v) => `${v} t`}
+                      tickFormatter={(v) => `${formatTonnes(v * 1000)} t`}
                     />
                     <YAxis type="category" dataKey="name" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} width={120} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-                      formatter={(value: number) => [`${value} t CO₂e`, "Intensity"]}
+                      formatter={(value: number) => [`${formatTonnes(value * 1000)} t CO₂e`, "Intensity"]}
                     />
                     <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                       {benchmarkData.map((entry, i) => (
@@ -301,11 +301,11 @@ export default function Benchmarking() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="period" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false}
-                      tickFormatter={(v) => `${v.toFixed(0)} t`}
+                      tickFormatter={(v) => `${formatTonnes(v * 1000)} t`}
                     />
                     <Tooltip
                       contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-                      formatter={(value: number) => [`${value.toFixed(2)} t CO₂e`, ""]}
+                      formatter={(value: number) => [`${formatTonnes(value * 1000)} t CO₂e`, ""]}
                     />
                     <Legend wrapperStyle={{ fontSize: 11, color: "hsl(220 10% 46%)" }} />
                     <Line type="monotone" dataKey="actual" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))", r: 4 }} name="Actual" />
