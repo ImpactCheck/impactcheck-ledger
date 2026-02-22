@@ -1,15 +1,18 @@
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import logoImg from "@/assets/logo.png";
 import {
   ArrowRight, Shield, Zap, DollarSign, Sun, Moon,
   Building2, Scale, TrendingDown, FileCheck, Clock,
   ChevronRight, Leaf, BarChart3, CheckCircle2, Users,
-  Globe, Eye,
+  Globe, Eye, Check, LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const AUDIENCES = [
   {
@@ -76,11 +79,39 @@ const TRUST_POINTS = [
   { icon: CheckCircle2, text: "Audit-grade documentation trail" },
 ];
 
+const PRO_FEATURES = [
+  "Unlimited projects",
+  "Full lifecycle carbon reports",
+  "Multi-region comparison",
+  "AI reduction strategies",
+  "Audit-grade PDF certificates",
+  "Priority support",
+];
+
 export default function Landing() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
 
   const goToDemo = () => navigate("/app");
+  const goToAuth = () => navigate("/auth");
+
+  const handleCheckout = async () => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout");
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -89,12 +120,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
           <div className="flex items-center gap-3">
             <img src={logoImg} alt="ImpactCheck" className="h-9 w-9 object-contain" />
-            <div>
-              <span className="text-base font-bold tracking-tight">ImpactCheck</span>
-              <span className="hidden sm:inline text-xs text-muted-foreground ml-2 font-mono">
-                Carbon Audit Platform
-              </span>
-            </div>
+            <span className="text-base font-bold tracking-tight">ImpactCheck</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -104,16 +130,31 @@ export default function Landing() {
             >
               {theme === "dark" ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
             </button>
-            <Button onClick={goToDemo} size="sm" className="gap-1.5 rounded-xl h-9 px-5 shadow-sm">
-              Free Demo <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
+            {user ? (
+              <div className="flex items-center gap-2">
+                <Button onClick={goToDemo} size="sm" className="gap-1.5 rounded-xl h-9 px-5 shadow-sm">
+                  Dashboard <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+                <Button onClick={signOut} variant="ghost" size="sm" className="rounded-xl h-9 px-3">
+                  <LogOut className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button onClick={goToAuth} variant="ghost" size="sm" className="rounded-xl h-9 px-4">
+                  Sign In
+                </Button>
+                <Button onClick={goToDemo} size="sm" className="gap-1.5 rounded-xl h-9 px-5 shadow-sm">
+                  Free Demo <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden bg-mesh-green">
-        {/* Decorative blobs */}
         <div className="absolute inset-0 pointer-events-none" aria-hidden>
           <div className="absolute top-[-10%] left-[15%] w-[500px] h-[500px] rounded-full bg-primary/[0.06] blur-3xl" />
           <div className="absolute bottom-[-20%] right-[10%] w-[400px] h-[400px] rounded-full bg-primary/[0.04] blur-3xl" />
@@ -144,14 +185,13 @@ export default function Landing() {
               Try Free Demo <ArrowRight className="h-5 w-5" />
             </Button>
             <a
-              href="#how-it-works"
+              href="#pricing"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
             >
-              See how it works <ChevronRight className="h-4 w-4" />
+              See pricing <ChevronRight className="h-4 w-4" />
             </a>
           </div>
 
-          {/* Trust badges */}
           <div className="mt-16 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
             {TRUST_POINTS.map((tp) => (
               <div key={tp.text} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -244,7 +284,6 @@ export default function Landing() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {STEPS.map((s, idx) => (
               <div key={s.num} className="relative">
-                {/* Connector line */}
                 {idx < STEPS.length - 1 && (
                   <div className="hidden lg:block absolute top-8 left-[calc(50%+40px)] right-[-24px] h-px bg-border" aria-hidden />
                 )}
@@ -261,8 +300,75 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Pricing ──────────────────────────────────────────────── */}
+      <section id="pricing" className="py-20 md:py-28 bg-muted/30">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-14">
+            <p className="step-number mb-2">Pricing</p>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+              Start free, scale when ready
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              Try ImpactCheck with up to 3 projects for free. Upgrade to Pro for unlimited access.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+            {/* Free tier */}
+            <Card className="card-elevated border-0 rounded-3xl">
+              <CardContent className="p-8">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 font-mono">Free</p>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className="text-4xl font-extrabold">$0</span>
+                  <span className="text-muted-foreground text-sm">/month</span>
+                </div>
+                <p className="text-sm text-muted-foreground mb-6">Up to 3 projects</p>
+                <ul className="space-y-2.5 mb-8">
+                  {["Up to 3 projects", "Full lifecycle reports", "Basic emission mapping", "Print/export PDF"].map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-sm">
+                      <Check className="h-4 w-4 text-primary shrink-0" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button onClick={goToDemo} variant="outline" className="w-full rounded-xl h-11">
+                  Get Started Free
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Pro tier */}
+            <Card className="card-elevated border-0 rounded-3xl border-glow relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-green" />
+              <CardContent className="p-8">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary font-mono">Pro</p>
+                  <span className="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">Popular</span>
+                </div>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className="text-4xl font-extrabold">$99</span>
+                  <span className="text-muted-foreground text-sm">/month</span>
+                </div>
+                <p className="text-sm text-muted-foreground mb-6">Unlimited projects</p>
+                <ul className="space-y-2.5 mb-8">
+                  {PRO_FEATURES.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-sm">
+                      <Check className="h-4 w-4 text-primary shrink-0" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button onClick={handleCheckout} className="w-full rounded-xl h-11 glow-green">
+                  Subscribe to Pro
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
       {/* ── CSRD callout ─────────────────────────────────────────── */}
-      <section className="py-20 md:py-28 bg-muted/30">
+      <section className="py-20 md:py-28">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <div className="inline-flex items-center gap-2 bg-warning/10 text-warning text-xs font-semibold px-4 py-1.5 rounded-full mb-6 border border-warning/20">
             <Clock className="h-3.5 w-3.5" />
@@ -287,7 +393,7 @@ export default function Landing() {
       </section>
 
       {/* ── Comparison table ─────────────────────────────────────── */}
-      <section className="py-20 md:py-28">
+      <section className="py-20 md:py-28 bg-muted/30">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center mb-12">
             <p className="step-number mb-2">Comparison</p>
@@ -309,7 +415,7 @@ export default function Landing() {
                 <tbody>
                   {[
                     ["Turnaround time", "Minutes", "3–6 months"],
-                    ["Cost", "From €0 (demo)", "€30k – €100k+"],
+                    ["Cost", "From $0 (free tier)", "€30k – €100k+"],
                     ["Methodology", "Open, standardized", "Proprietary, varies"],
                     ["Reproducibility", "100% reproducible", "Analyst-dependent"],
                     ["Multi-region comparison", "Built-in", "Extra engagement"],
@@ -333,7 +439,6 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto px-6">
           <Card className="border-0 rounded-3xl overflow-hidden relative">
             <div className="bg-gradient-green p-10 md:p-16 text-center relative overflow-hidden">
-              {/* Decorative circles */}
               <div className="absolute -top-10 -left-10 h-40 w-40 rounded-full bg-primary-foreground/10" aria-hidden />
               <div className="absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-primary-foreground/5" aria-hidden />
 
@@ -345,7 +450,7 @@ export default function Landing() {
                   Ready to audit your carbon footprint?
                 </h2>
                 <p className="text-primary-foreground/80 max-w-lg mx-auto mb-8 text-lg">
-                  Try ImpactCheck for free — no signup required. Upload your data and get results in minutes.
+                  Try ImpactCheck for free — no credit card required. Upload your data and get results in minutes.
                 </p>
                 <Button
                   onClick={goToDemo}
@@ -366,7 +471,6 @@ export default function Landing() {
           <div className="flex items-center gap-3">
             <img src={logoImg} alt="ImpactCheck" className="h-7 w-7 object-contain" />
             <span className="text-sm font-semibold">ImpactCheck</span>
-            <span className="text-xs text-muted-foreground">· Carbon Audit Platform</span>
           </div>
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} ImpactCheck. Standardized emission factors via Climatiq & IPCC.
