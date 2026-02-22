@@ -117,6 +117,45 @@ const SIMULATION_STEPS: StepDef[] = [
   },
 ];
 
+const RECOMMENDATIONS_STEPS: StepDef[] = [
+  {
+    keys: ["loading_data"],
+    label: "Loading data",
+    icon: <FileText className="h-4 w-4" />,
+    defaultDescription: "Fetching emission estimates and hotspots…",
+  },
+  {
+    keys: ["analyzing_hotspots"],
+    label: "Analyzing hotspots",
+    icon: <BarChart3 className="h-4 w-4" />,
+    defaultDescription: "Identifying highest-impact emission sources…",
+  },
+  {
+    keys: ["generating_strategies"],
+    label: "Generating strategies",
+    icon: <Sparkles className="h-4 w-4" />,
+    defaultDescription: "AI is generating reduction strategies…",
+  },
+  {
+    keys: ["parsing_results"],
+    label: "Parsing results",
+    icon: <Cpu className="h-4 w-4" />,
+    defaultDescription: "Processing AI-generated strategies…",
+  },
+  {
+    keys: ["saving"],
+    label: "Saving",
+    icon: <Check className="h-4 w-4" />,
+    defaultDescription: "Storing reduction strategies…",
+  },
+  {
+    keys: ["done"],
+    label: "Complete",
+    icon: <Check className="h-4 w-4" />,
+    defaultDescription: "Recommendations generated.",
+  },
+];
+
 // ─── Elapsed-time hook ────────────────────────────────────────────────────────
 
 function useElapsedSeconds(job: JobStatus | null): number {
@@ -145,11 +184,17 @@ function formatElapsed(seconds: number): string {
 
 interface JobProgressCardProps {
   job: JobStatus;
-  type: "extract" | "mapping" | "simulation";
+  type: "extract" | "mapping" | "simulation" | "recommendations";
 }
 
 export default function JobProgressCard({ job, type }: JobProgressCardProps) {
-  const steps = type === "extract" ? EXTRACT_STEPS : type === "simulation" ? SIMULATION_STEPS : MAPPING_STEPS;
+  const steps = type === "extract"
+    ? EXTRACT_STEPS
+    : type === "simulation"
+      ? SIMULATION_STEPS
+      : type === "recommendations"
+        ? RECOMMENDATIONS_STEPS
+        : MAPPING_STEPS;
   const stageKey = job.stage ?? "";
   const elapsed = useElapsedSeconds(job);
 
