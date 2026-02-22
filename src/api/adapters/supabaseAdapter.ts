@@ -37,7 +37,7 @@ async function getComplianceFromDb(projectId: string): Promise<Record<string, Re
     .eq("project_id", projectId)
     .maybeSingle();
   if (error || !data?.by_region || Object.keys(data.by_region as object).length === 0) return null;
-  return data.by_region as Record<string, RegionComplianceByPeriod>;
+  return data.by_region as unknown as Record<string, RegionComplianceByPeriod>;
 }
 
 async function invokeCompliance(projectId: string, forceRefresh?: boolean): Promise<{ byRegion: Record<string, RegionComplianceByPeriod> }> {
