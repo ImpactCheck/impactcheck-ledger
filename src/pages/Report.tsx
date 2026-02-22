@@ -1,41 +1,43 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Building2, Zap } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
-import type { Report as ReportType } from "@/contracts/impactcheck.v2";
-import { formatTonnes, getActivityPhase } from "@/contracts/impactcheck.v2";
-import { ComplianceBadge } from "@/components/ComplianceBadge";
+import type { Report as ReportType, Recommendation } from "@/contracts/impactcheck.v2";
 import { AuditCertificate } from "@/components/AuditCertificate";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  getReportLayout,
+  SECTION_LABELS,
+  USE_CASE_LABELS,
+  type ReportSectionId,
+  type SectionLayout,
+} from "@/lib/report-presentation";
 
-const EMBODIED_COLOR = "hsl(30 80% 55%)";
-const OPERATIONAL_COLOR = "hsl(200 70% 50%)";
-
-const CATEGORY_COLORS: Record<string, string> = {};
-function getCategoryColor(category: string): string {
-  const phase = getActivityPhase(category);
-  if (!CATEGORY_COLORS[category]) {
-    // Assign a shade based on phase
-    const embodiedPalette = ["hsl(30 80% 55%)", "hsl(35 75% 50%)", "hsl(25 70% 45%)", "hsl(40 65% 60%)"];
-    const operationalPalette = ["hsl(200 70% 50%)", "hsl(210 65% 55%)", "hsl(190 60% 45%)", "hsl(180 55% 50%)", "hsl(220 60% 55%)"];
-    const palette = phase === "embodied" ? embodiedPalette : operationalPalette;
-    const existing = Object.keys(CATEGORY_COLORS).filter(k => getActivityPhase(k) === phase).length;
-    CATEGORY_COLORS[category] = palette[existing % palette.length];
-  }
-  return CATEGORY_COLORS[category];
-}
+// Section components
+import { ExecutiveSummarySection } from "@/components/report/ExecutiveSummarySection";
+import { HotspotsSection } from "@/components/report/HotspotsSection";
+import { ComplianceSection } from "@/components/report/ComplianceSection";
+import { CategoryBreakdownSection } from "@/components/report/CategoryBreakdownSection";
+import { RegionComparisonSection } from "@/components/report/RegionComparisonSection";
+import { ScenariosSection } from "@/components/report/ScenariosSection";
+import { MissingDataSection } from "@/components/report/MissingDataSection";
+import { DataQualitySection } from "@/components/report/DataQualitySection";
+import { TraceabilitySection } from "@/components/report/TraceabilitySection";
+import { AssumptionsSection } from "@/components/report/AssumptionsSection";
 
 export default function Report() {
   const navigate = useNavigate();
   const { project } = useProject();
   const projectId = project.currentProjectId;
   const [report, setReport] = useState<ReportType | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [collapsedOverrides, setCollapsedOverrides] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!projectId) {
@@ -44,25 +46,93 @@ export default function Report() {
       return;
     }
     setLoading(true);
-    api.getReport(projectId)
-      .then(setReport)
+    Promise.all([
+      api.getReport(projectId),
+      api.generateRecommendations(projectId).catch(() => [] as Recommendation[]),
+    ])
+      .then(([r, recs]) => {
+        setReport(r);
+        setRecommendations(recs);
+      })
       .catch((e) => setError(e.message ?? "Failed to load report"))
       .finally(() => setLoading(false));
   }, [projectId]);
 
-  // Derive embodied/operational totals from category breakdown
-  const phaseTotals = useMemo(() => {
-    if (!report?.categoryBreakdownByRegion) return null;
-    const primaryRegion = Object.keys(report.totalsByRegion)[0] ?? "";
-    const categories = report.categoryBreakdownByRegion[primaryRegion] ?? [];
-    let embodied = 0;
-    let operational = 0;
-    for (const c of categories) {
-      if (getActivityPhase(c.category) === "embodied") embodied += c.co2eKg;
-      else operational += c.co2eKg;
+  const useCase = project.useCase;
+  const hasMultipleRegions = report ? Object.keys(report.totalsByRegion).length > 1 : false;
+  const layout = useMemo(() => getReportLayout(useCase, hasMultipleRegions), [useCase, hasMultipleRegions]);
+
+  const primaryRegion = report ? Object.keys(report.totalsByRegion)[0] ?? "" : "";
+  const categories = report?.categoryBreakdownByRegion?.[primaryRegion] ?? [];
+  const regionCompareData = report
+    ? Object.entries(report.totalsByRegion).map(([region, total]) => ({ region: region.replace(/_/g, " "), total }))
+    : [];
+
+  const isSectionCollapsed = useCallback(
+    (section: SectionLayout) => {
+      if (showAll) return false;
+      if (collapsedOverrides[section.id] !== undefined) return collapsedOverrides[section.id];
+      return section.collapsed ?? false;
+    },
+    [showAll, collapsedOverrides]
+  );
+
+  const toggleSection = (id: ReportSectionId) => {
+    setCollapsedOverrides((prev) => ({ ...prev, [id]: !isSectionCollapsed({ id, collapsed: layout.sections.find(s => s.id === id)?.collapsed }) }));
+  };
+
+  const renderSection = (section: SectionLayout) => {
+    if (!report) return null;
+    const isHero = section.hero ?? false;
+    const collapsed = isSectionCollapsed(section);
+
+    const content = (() => {
+      switch (section.id) {
+        case "executive-summary":
+          return <ExecutiveSummarySection report={report} primaryRegion={primaryRegion} hero={isHero} />;
+        case "hotspots":
+          return <HotspotsSection report={report} limit={layout.limits.hotspots} hero={isHero} />;
+        case "scenarios":
+          return <ScenariosSection recommendations={recommendations} limit={layout.limits.scenarios} hero={isHero} />;
+        case "compliance":
+          return <ComplianceSection report={report} hero={isHero} />;
+        case "missing-data":
+          return <MissingDataSection report={report} hero={isHero} />;
+        case "region-comparison":
+          return <RegionComparisonSection regionData={regionCompareData} hero={isHero} />;
+        case "category-breakdown":
+          return <CategoryBreakdownSection categories={categories} primaryRegion={primaryRegion} hero={isHero} />;
+        case "data-quality":
+          return <DataQualitySection report={report} hero={isHero} />;
+        case "traceability":
+          return <TraceabilitySection report={report} hero={isHero} />;
+        case "assumptions":
+          return <AssumptionsSection hero={isHero} />;
+        default:
+          return null;
+      }
+    })();
+
+    if (!content) return null;
+
+    // Collapsible wrapper
+    if (section.collapsed !== undefined || collapsedOverrides[section.id] !== undefined) {
+      return (
+        <div key={section.id}>
+          <button
+            onClick={() => toggleSection(section.id)}
+            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-2 w-full text-left"
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {SECTION_LABELS[section.id]}
+          </button>
+          {!collapsed && content}
+        </div>
+      );
     }
-    return { embodied, operational };
-  }, [report]);
+
+    return <div key={section.id}>{content}</div>;
+  };
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -92,23 +162,30 @@ export default function Report() {
     </div>
   );
 
-  const primaryRegion = Object.keys(report.totalsByRegion)[0] ?? "";
-  const primaryTotal = report.totalsByRegion[primaryRegion] ?? 0;
-  const categories = report.categoryBreakdownByRegion?.[primaryRegion] ?? [];
-  const regionCompareData = Object.entries(report.totalsByRegion).map(
-    ([region, total]) => ({ region: region.replace(/_/g, " "), total })
-  );
-
   return (
     <div className="max-w-4xl mx-auto space-y-6 print:space-y-4 print:max-w-none print:p-0 animate-fade-in-up">
       {/* Header */}
       <div className="flex items-center justify-between print:hidden">
         <div>
-          <p className="step-number mb-1">Step 5</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="step-number">Step 5</p>
+            <Badge variant="outline" className="text-[10px] rounded-full font-mono">
+              {USE_CASE_LABELS[useCase]} view
+            </Badge>
+          </div>
           <h1 className="text-2xl font-bold tracking-tight">Carbon Report</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Full lifecycle carbon assessment.</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Full lifecycle carbon assessment per GHG Protocol.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAll((v) => !v)}
+            className="gap-1.5 rounded-xl"
+          >
+            {showAll ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {showAll ? "Use case layout" : "Show all sections"}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5 rounded-xl">
             <Printer className="h-3.5 w-3.5" /> Print / Export
           </Button>
@@ -119,194 +196,11 @@ export default function Report() {
       {/* Print-only header */}
       <div className="hidden print:block">
         <h1 className="text-xl font-bold">ImpactCheck — Carbon Report</h1>
-        <p className="text-sm">{project.projectName} · {project.year} · {primaryRegion.replace(/_/g, " ")}</p>
+        <p className="text-sm">{project.projectName} · {project.year} · {primaryRegion.replace(/_/g, " ")} · {USE_CASE_LABELS[useCase]} view</p>
       </div>
 
-      {/* Hero total */}
-      <Card className="card-elevated border-0 overflow-hidden print:border print:shadow-none">
-        <div className="bg-gradient-green p-6 text-primary-foreground">
-          <p className="text-xs uppercase tracking-wider opacity-80">Total Lifecycle Carbon — {primaryRegion.replace(/_/g, " ")}</p>
-          <p className="text-4xl font-bold font-mono mt-2">
-            {formatTonnes(primaryTotal)} <span className="text-lg font-normal opacity-70">tonnes CO₂e</span>
-          </p>
-          {report.deltaVsBaselineKg !== undefined && (
-            <p className="text-sm mt-1.5 opacity-80">
-              {report.deltaVsBaselineKg > 0 ? "+" : ""}{formatTonnes(report.deltaVsBaselineKg)} t vs. baseline
-            </p>
-          )}
-        </div>
-        <CardContent className="pt-4 pb-4 flex gap-3">
-          <ComplianceBadge level={report.compliance.us.status} />
-          <ComplianceBadge level={report.compliance.eu.status} />
-        </CardContent>
-      </Card>
-
-      {/* Embodied vs Operational split */}
-      {phaseTotals && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="card-elevated border-0 print:border print:shadow-none">
-            <CardContent className="pt-5 pb-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "hsl(30 80% 55% / 0.15)" }}>
-                  <Building2 className="h-5 w-5" style={{ color: EMBODIED_COLOR }} />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Embodied Carbon</p>
-                  <p className="text-2xl font-bold font-mono">
-                    {formatTonnes(phaseTotals.embodied)} <span className="text-sm font-normal text-muted-foreground">t CO₂e</span>
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">One-time · construction & hardware</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="card-elevated border-0 print:border print:shadow-none">
-            <CardContent className="pt-5 pb-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "hsl(200 70% 50% / 0.15)" }}>
-                  <Zap className="h-5 w-5" style={{ color: OPERATIONAL_COLOR }} />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Operational Carbon</p>
-                  <p className="text-2xl font-bold font-mono">
-                    {formatTonnes(phaseTotals.operational)} <span className="text-sm font-normal text-muted-foreground">t CO₂e</span>
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">Per year · energy & operations</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Compliance detail */}
-      <Card className="card-elevated border-0 print:border print:shadow-none">
-        <CardHeader>
-          <CardTitle className="text-lg">Regulatory Compliance</CardTitle>
-          <CardDescription>US and EU compliance assessment with reasons.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl bg-muted/40 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <ComplianceBadge level={report.compliance.us.status} />
-                <span className="text-sm font-semibold">US (EPA)</span>
-              </div>
-              <ul className="text-xs text-muted-foreground space-y-1.5 ml-1">
-                {report.compliance.us.reasons.map((r, i) => <li key={i}>• {r}</li>)}
-              </ul>
-            </div>
-            <div className="rounded-xl bg-muted/40 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <ComplianceBadge level={report.compliance.eu.status} />
-                <span className="text-sm font-semibold">EU (CSRD)</span>
-              </div>
-              <ul className="text-xs text-muted-foreground space-y-1.5 ml-1">
-                {report.compliance.eu.reasons.map((r, i) => <li key={i}>• {r}</li>)}
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid-cols-2">
-        <Card className="card-elevated border-0 print:border print:shadow-none">
-          <CardHeader>
-            <CardTitle className="text-lg">Category Breakdown</CardTitle>
-            <CardDescription>Emissions by category for {primaryRegion.replace(/_/g, " ")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[260px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categories} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="category" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatTonnes(v)} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: "hsl(0 0% 100%)", border: "1px solid hsl(40 15% 90%)", borderRadius: 12, fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-                    formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
-                  />
-                  <Bar dataKey="co2eKg" radius={[6, 6, 0, 0]}>
-                    {categories.map((c, i) => <Cell key={i} fill={getCategoryColor(c.category)} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            {/* Legend */}
-            <div className="flex items-center gap-4 mt-3 text-[11px] text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: EMBODIED_COLOR }} />
-                Embodied
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: OPERATIONAL_COLOR }} />
-                Operational
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {regionCompareData.length > 1 && (
-          <Card className="card-elevated border-0 print:border print:shadow-none">
-            <CardHeader>
-              <CardTitle className="text-lg">Region Comparison</CardTitle>
-              <CardDescription>Total CO₂e by region</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={regionCompareData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="region" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatTonnes(v)} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "hsl(0 0% 100%)", border: "1px solid hsl(40 15% 90%)", borderRadius: 12, fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-                      formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
-                    />
-                    <Bar dataKey="total" radius={[6, 6, 0, 0]} fill="hsl(152 52% 40%)" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* Hotspots */}
-      <Card className="card-elevated border-0 print:border print:shadow-none">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-warning" />
-            Top Hotspots
-          </CardTitle>
-          <CardDescription>Highest-emission activities requiring attention.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {report.hotspots.slice(0, 10).map((h, i) => (
-              <div key={i} className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3 text-sm hover:bg-muted/60 transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground font-mono w-5">{i + 1}.</span>
-                  <span className="font-medium">{h.text}</span>
-                  {h.phase && (
-                    <Badge
-                      className={`text-[10px] rounded-full ${
-                        h.phase === "embodied"
-                          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800"
-                          : "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 border-sky-200 dark:border-sky-800"
-                      }`}
-                    >
-                      {h.phase === "embodied" ? "Embodied" : "Operational"}
-                    </Badge>
-                  )}
-                </div>
-                <span className="font-mono font-bold text-primary">{formatTonnes(h.co2eKg)} t</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Dynamic sections */}
+      {layout.sections.map(renderSection)}
 
       {/* Navigation */}
       <div className="flex justify-between print:hidden">
