@@ -12,6 +12,7 @@ import Setup from "@/pages/Setup";
 import Upload from "@/pages/Upload";
 import Activities from "@/pages/Activities";
 import Mapping from "@/pages/Mapping";
+import Benchmarking from "@/pages/Benchmarking";
 import Report from "@/pages/Report";
 import Recommendations from "@/pages/Recommendations";
 import NotFound from "./pages/NotFound";
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/upload" element={<Upload />} />
               <Route path="/activities" element={<Activities />} />
               <Route path="/mapping" element={<Mapping />} />
+              <Route path="/benchmarking" element={<Benchmarking />} />
               <Route path="/report" element={<Report />} />
               <Route path="/recommendations" element={<Recommendations />} />
             </Route>

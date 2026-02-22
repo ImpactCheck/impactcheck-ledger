@@ -3,7 +3,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   Settings, Upload, Activity, GitMerge, FileText, Lightbulb,
-  Check, Sun, Moon, LayoutDashboard,
+  Check, Sun, Moon, LayoutDashboard, BarChart2, User,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
@@ -27,12 +27,13 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { path: "/setup", label: "Setup", icon: Settings, completionKey: "setup" },
-  { path: "/upload", label: "Upload", icon: Upload, completionKey: "upload" },
-  { path: "/activities", label: "Activities", icon: Activity, completionKey: "activities" },
-  { path: "/mapping", label: "Mapping", icon: GitMerge, completionKey: "mapping" },
-  { path: "/report", label: "Report", icon: FileText, completionKey: "report" },
-  { path: "/recommendations", label: "Suggest", icon: Lightbulb, completionKey: "recommendations" },
+  { path: "/setup",           label: "Project Setup",       icon: Settings,   completionKey: "setup" },
+  { path: "/upload",          label: "Data Collection",     icon: Upload,     completionKey: "upload" },
+  { path: "/activities",      label: "Activity Review",     icon: Activity,   completionKey: "activities" },
+  { path: "/mapping",         label: "Mapping & Factors",   icon: GitMerge,   completionKey: "mapping" },
+  { path: "/benchmarking",    label: "Benchmarking",        icon: BarChart2,  completionKey: "benchmarking" },
+  { path: "/report",          label: "Carbon Report",       icon: FileText,   completionKey: "report" },
+  { path: "/recommendations", label: "Reduction Strategies",icon: Lightbulb,  completionKey: "recommendations" },
 ];
 
 export default function DashboardLayout() {
@@ -170,6 +171,17 @@ export default function DashboardLayout() {
                   <span className="text-[10px] text-muted-foreground truncate">{primaryRegionLabel}</span>
                 </>
               )}
+            </div>
+          </div>
+
+          {/* User profile */}
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-muted transition-all cursor-default">
+            <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-primary/15 text-primary shrink-0">
+              <User className="h-3.5 w-3.5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[12px] font-semibold text-foreground truncate leading-tight">Alex Morgan</p>
+              <p className="text-[10px] text-muted-foreground truncate">Lead Auditor</p>
             </div>
           </div>
         </div>

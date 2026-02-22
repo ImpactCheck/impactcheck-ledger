@@ -1,16 +1,16 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Building2, Zap } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Building2, Zap, Leaf, TrendingDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
 import type { Report as ReportType } from "@/contracts/impactcheck.v2";
 import { formatTonnes, getActivityPhase } from "@/contracts/impactcheck.v2";
-import { ComplianceBadge } from "@/components/ComplianceBadge";
 import { AuditCertificate } from "@/components/AuditCertificate";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { cn } from "@/lib/utils";
 
 const EMBODIED_COLOR = "hsl(30 80% 55%)";
 const OPERATIONAL_COLOR = "hsl(200 70% 50%)";
@@ -19,14 +19,65 @@ const CATEGORY_COLORS: Record<string, string> = {};
 function getCategoryColor(category: string): string {
   const phase = getActivityPhase(category);
   if (!CATEGORY_COLORS[category]) {
-    // Assign a shade based on phase
     const embodiedPalette = ["hsl(30 80% 55%)", "hsl(35 75% 50%)", "hsl(25 70% 45%)", "hsl(40 65% 60%)"];
     const operationalPalette = ["hsl(200 70% 50%)", "hsl(210 65% 55%)", "hsl(190 60% 45%)", "hsl(180 55% 50%)", "hsl(220 60% 55%)"];
     const palette = phase === "embodied" ? embodiedPalette : operationalPalette;
-    const existing = Object.keys(CATEGORY_COLORS).filter(k => getActivityPhase(k) === phase).length;
+    const existing = Object.keys(CATEGORY_COLORS).filter((k) => getActivityPhase(k) === phase).length;
     CATEGORY_COLORS[category] = palette[existing % palette.length];
   }
   return CATEGORY_COLORS[category];
+}
+
+const RENEWABLE_MIX: Record<string, number> = {
+  norway_hydro: 94,
+  iceland_geo:  97,
+  iowa_miso:    42,
+  virginia_pjm: 35,
+  texas_ercot:  28,
+  singapore:    4,
+};
+
+const REGION_LABELS: Record<string, string> = {
+  texas_ercot:  "Texas (ERCOT)",
+  norway_hydro: "Norway (Hydro)",
+  virginia_pjm: "Virginia (PJM)",
+  iowa_miso:    "Iowa (MISO)",
+  iceland_geo:  "Iceland (Geo)",
+  singapore:    "Singapore",
+};
+
+function ComplianceStatusCard({
+  label,
+  status,
+  reasons,
+}: {
+  label: string;
+  status: "green" | "yellow" | "red" | "PENDING";
+  reasons: string[];
+}) {
+  const isReady = status === "green";
+  const isAction = status === "yellow" || status === "red";
+  const displayLabel = isReady ? "READY" : isAction ? "ACTION NEEDED" : "PENDING";
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-semibold">{label}</span>
+        <span
+          className={cn(
+            "text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full border font-mono",
+            isReady && "text-primary bg-primary/10 border-primary/25",
+            isAction && "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-900/20 dark:border-amber-800",
+            !isReady && !isAction && "text-muted-foreground bg-muted border-border"
+          )}
+        >
+          {displayLabel}
+        </span>
+      </div>
+      <ul className="text-xs text-muted-foreground space-y-1.5">
+        {reasons.map((r, i) => <li key={i}>• {r}</li>)}
+      </ul>
+    </div>
+  );
 }
 
 export default function Report() {
@@ -50,7 +101,6 @@ export default function Report() {
       .finally(() => setLoading(false));
   }, [projectId]);
 
-  // Derive embodied/operational totals from category breakdown
   const phaseTotals = useMemo(() => {
     if (!report?.categoryBreakdownByRegion) return null;
     const primaryRegion = Object.keys(report.totalsByRegion)[0] ?? "";
@@ -98,13 +148,17 @@ export default function Report() {
   const regionCompareData = Object.entries(report.totalsByRegion).map(
     ([region, total]) => ({ region: region.replace(/_/g, " "), total })
   );
+  const renewablePct = RENEWABLE_MIX[primaryRegion] ?? 20;
+  const carbonOffset = parseFloat((primaryTotal / 1000 * 0.49).toFixed(1));
+  const sciScore = categories.length > 0 ? (primaryTotal / 1000 / categories.length).toFixed(2) : "—";
+  const topHotspot = report.hotspots?.[0]?.text ?? "compute workloads";
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 print:space-y-4 print:max-w-none print:p-0 animate-fade-in-up">
+    <div className="max-w-5xl mx-auto space-y-6 print:space-y-4 print:max-w-none print:p-0 animate-fade-in-up">
       {/* Header */}
       <div className="flex items-center justify-between print:hidden">
         <div>
-          <p className="step-number mb-1">Step 5</p>
+          <p className="step-number mb-1">Step 06</p>
           <h1 className="text-2xl font-bold tracking-tight">Carbon Report</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Full lifecycle carbon assessment.</p>
         </div>
@@ -122,10 +176,41 @@ export default function Report() {
         <p className="text-sm">{project.projectName} · {project.year} · {primaryRegion.replace(/_/g, " ")}</p>
       </div>
 
-      {/* Hero total */}
+      {/* ── 4 metric header cards ──────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 print:hidden">
+        <MetricCard
+          label="Total Lifecycle Carbon"
+          value={`${formatTonnes(primaryTotal)} t`}
+          sub="CO₂e lifecycle"
+          icon={<Leaf className="h-4 w-4" />}
+          accent
+        />
+        <MetricCard
+          label="SCI Score"
+          value={typeof sciScore === "string" ? sciScore : `${sciScore} t`}
+          sub="t CO₂e per category"
+          icon={<TrendingDown className="h-4 w-4" />}
+        />
+        <MetricCard
+          label="Renewable Mix"
+          value={`${renewablePct}%`}
+          sub={REGION_LABELS[primaryRegion] ?? primaryRegion}
+          icon={<Zap className="h-4 w-4" />}
+        />
+        <MetricCard
+          label="Carbon Offset"
+          value={`${carbonOffset} t`}
+          sub="50% offset estimate"
+          icon={<Building2 className="h-4 w-4" />}
+        />
+      </div>
+
+      {/* Hero total (print + desktop) */}
       <Card className="card-elevated border-0 overflow-hidden print:border print:shadow-none">
         <div className="bg-gradient-green p-6 text-primary-foreground">
-          <p className="text-xs uppercase tracking-wider opacity-80">Total Lifecycle Carbon — {primaryRegion.replace(/_/g, " ")}</p>
+          <p className="text-xs uppercase tracking-wider opacity-80">
+            Total Lifecycle Carbon — {REGION_LABELS[primaryRegion] ?? primaryRegion.replace(/_/g, " ")}
+          </p>
           <p className="text-4xl font-bold font-mono mt-2">
             {formatTonnes(primaryTotal)} <span className="text-lg font-normal opacity-70">tonnes CO₂e</span>
           </p>
@@ -135,11 +220,21 @@ export default function Report() {
             </p>
           )}
         </div>
-        <CardContent className="pt-4 pb-4 flex gap-3">
-          <ComplianceBadge level={report.compliance.us.status} />
-          <ComplianceBadge level={report.compliance.eu.status} />
-        </CardContent>
       </Card>
+
+      {/* AI Insight box */}
+      <div className="rounded-2xl bg-primary/8 border border-primary/20 px-5 py-4 flex items-start gap-3 print:hidden">
+        <div className="h-7 w-7 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
+          <span className="text-[10px] font-bold text-primary font-mono">AI</span>
+        </div>
+        <div>
+          <p className="text-xs font-bold text-primary uppercase tracking-wide mb-1">AI Insight</p>
+          <p className="text-sm text-foreground">
+            Migrating <span className="font-semibold">{topHotspot}</span> to a renewable energy region could reduce total carbon by up to{" "}
+            <span className="font-semibold text-primary">15%</span>.
+          </p>
+        </div>
+      </div>
 
       {/* Embodied vs Operational split */}
       {phaseTotals && (
@@ -179,32 +274,29 @@ export default function Report() {
         </div>
       )}
 
-      {/* Compliance detail */}
+      {/* Compliance Status cards */}
       <Card className="card-elevated border-0 print:border print:shadow-none">
         <CardHeader>
           <CardTitle className="text-lg">Regulatory Compliance</CardTitle>
-          <CardDescription>US and EU compliance assessment with reasons.</CardDescription>
+          <CardDescription>Assessment status by framework.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl bg-muted/40 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <ComplianceBadge level={report.compliance.us.status} />
-                <span className="text-sm font-semibold">US (EPA)</span>
-              </div>
-              <ul className="text-xs text-muted-foreground space-y-1.5 ml-1">
-                {report.compliance.us.reasons.map((r, i) => <li key={i}>• {r}</li>)}
-              </ul>
-            </div>
-            <div className="rounded-xl bg-muted/40 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <ComplianceBadge level={report.compliance.eu.status} />
-                <span className="text-sm font-semibold">EU (CSRD)</span>
-              </div>
-              <ul className="text-xs text-muted-foreground space-y-1.5 ml-1">
-                {report.compliance.eu.reasons.map((r, i) => <li key={i}>• {r}</li>)}
-              </ul>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <ComplianceStatusCard
+              label="EU CSRD"
+              status={report.compliance.eu.status}
+              reasons={report.compliance.eu.reasons}
+            />
+            <ComplianceStatusCard
+              label="US SEC Climate"
+              status={report.compliance.us.status}
+              reasons={report.compliance.us.reasons}
+            />
+            <ComplianceStatusCard
+              label="ISO 14064"
+              status={"PENDING" as "green" | "yellow" | "red" | "PENDING"}
+              reasons={["Verification audit not yet scheduled", "Data collection in progress"]}
+            />
           </div>
         </CardContent>
       </Card>
@@ -214,7 +306,7 @@ export default function Report() {
         <Card className="card-elevated border-0 print:border print:shadow-none">
           <CardHeader>
             <CardTitle className="text-lg">Category Breakdown</CardTitle>
-            <CardDescription>Emissions by category for {primaryRegion.replace(/_/g, " ")}</CardDescription>
+            <CardDescription>Emissions by category for {REGION_LABELS[primaryRegion] ?? primaryRegion.replace(/_/g, " ")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[260px]">
@@ -224,7 +316,7 @@ export default function Report() {
                   <XAxis dataKey="category" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatTonnes(v)} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: "hsl(0 0% 100%)", border: "1px solid hsl(40 15% 90%)", borderRadius: 12, fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
                     formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
                   />
                   <Bar dataKey="co2eKg" radius={[6, 6, 0, 0]}>
@@ -233,7 +325,6 @@ export default function Report() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            {/* Legend */}
             <div className="flex items-center gap-4 mt-3 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: EMBODIED_COLOR }} />
@@ -261,10 +352,10 @@ export default function Report() {
                     <XAxis dataKey="region" tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: "hsl(220 10% 46%)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatTonnes(v)} />
                     <Tooltip
-                      contentStyle={{ backgroundColor: "hsl(0 0% 100%)", border: "1px solid hsl(40 15% 90%)", borderRadius: 12, fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
                       formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
                     />
-                    <Bar dataKey="total" radius={[6, 6, 0, 0]} fill="hsl(152 52% 40%)" />
+                    <Bar dataKey="total" radius={[6, 6, 0, 0]} fill="hsl(var(--primary))" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -310,13 +401,49 @@ export default function Report() {
 
       {/* Navigation */}
       <div className="flex justify-between print:hidden">
-        <Button variant="outline" onClick={() => navigate("/mapping")} className="gap-2 rounded-xl">
+        <Button variant="outline" onClick={() => navigate("/benchmarking")} className="gap-2 rounded-xl">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
         <Button onClick={() => navigate("/recommendations")} className="gap-2 rounded-xl">
           Continue <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  label, value, sub, icon, accent,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  icon: React.ReactNode;
+  accent?: boolean;
+}) {
+  return (
+    <div className={cn(
+      "rounded-2xl p-4 border",
+      accent
+        ? "bg-primary text-primary-foreground border-primary"
+        : "bg-card border-border"
+    )}>
+      <div className="flex items-center justify-between mb-3">
+        <p className={cn(
+          "text-[10px] font-semibold uppercase tracking-widest",
+          accent ? "opacity-75" : "text-muted-foreground"
+        )}>
+          {label}
+        </p>
+        <div className={cn(
+          "h-7 w-7 rounded-lg flex items-center justify-center",
+          accent ? "bg-primary-foreground/15" : "bg-primary/10 text-primary"
+        )}>
+          {icon}
+        </div>
+      </div>
+      <p className={cn("text-2xl font-bold font-mono", accent ? "" : "text-foreground")}>{value}</p>
+      <p className={cn("text-[11px] mt-0.5", accent ? "opacity-70" : "text-muted-foreground")}>{sub}</p>
     </div>
   );
 }

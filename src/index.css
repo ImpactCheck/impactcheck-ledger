@@ -30,10 +30,10 @@
     --popover: 0 0% 100%;
     --popover-foreground: 218 37% 15%;
 
-    --primary: 160 84% 38%;
+    --primary: 142 82% 40%;
     --primary-foreground: 0 0% 100%;
-    --primary-light: 160 38% 90%;
-    --primary-dark: 164 75% 26%;
+    --primary-light: 142 60% 90%;
+    --primary-dark: 142 70% 28%;
 
     --secondary: 210 18% 94%;
     --secondary-foreground: 218 30% 25%;
@@ -79,58 +79,58 @@
     --font-mono: 'JetBrains Mono', monospace;
   }
 
-  /* Dark theme — navy base from #1d2a3e */
+  /* Dark theme — Stitch near-black (#18181b) */
   .dark {
-    --background: 218 37% 10%;
-    --foreground: 210 25% 92%;
+    --background: 0 0% 11%;
+    --foreground: 210 20% 90%;
 
-    --card: 218 35% 13%;
-    --card-foreground: 210 25% 92%;
+    --card: 0 0% 13%;
+    --card-foreground: 210 20% 90%;
 
-    --popover: 218 35% 15%;
-    --popover-foreground: 210 25% 92%;
+    --popover: 0 0% 15%;
+    --popover-foreground: 210 20% 90%;
 
-    --primary: 160 84% 42%;
-    --primary-foreground: 218 37% 10%;
-    --primary-light: 160 40% 20%;
-    --primary-dark: 160 80% 34%;
+    --primary: 142 82% 56%;
+    --primary-foreground: 0 0% 8%;
+    --primary-light: 142 50% 18%;
+    --primary-dark: 142 70% 40%;
 
-    --secondary: 218 28% 16%;
-    --secondary-foreground: 210 25% 88%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 210 20% 85%;
 
-    --muted: 218 25% 16%;
-    --muted-foreground: 215 18% 52%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 50%;
 
-    --accent: 218 28% 18%;
-    --accent-foreground: 210 25% 92%;
+    --accent: 0 0% 17%;
+    --accent-foreground: 210 20% 90%;
 
     --destructive: 0 72% 50%;
     --destructive-foreground: 210 40% 98%;
 
     --warning: 40 92% 52%;
-    --warning-foreground: 218 30% 8%;
+    --warning-foreground: 0 0% 8%;
 
-    --success: 160 84% 42%;
-    --success-foreground: 218 37% 10%;
+    --success: 142 82% 56%;
+    --success-foreground: 0 0% 8%;
 
-    --border: 218 28% 18%;
-    --input: 218 28% 18%;
-    --ring: 160 84% 42%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 142 82% 56%;
 
-    --chart-1: 160 84% 42%;
-    --chart-2: 160 55% 50%;
-    --chart-3: 164 70% 32%;
+    --chart-1: 142 82% 56%;
+    --chart-2: 142 60% 45%;
+    --chart-3: 142 70% 35%;
     --chart-4: 160 50% 44%;
     --chart-5: 168 55% 26%;
 
-    --sidebar-background: 218 37% 8%;
-    --sidebar-foreground: 210 20% 85%;
-    --sidebar-primary: 160 84% 42%;
-    --sidebar-primary-foreground: 218 37% 10%;
-    --sidebar-accent: 218 28% 15%;
-    --sidebar-accent-foreground: 210 25% 92%;
-    --sidebar-border: 218 28% 16%;
-    --sidebar-ring: 160 84% 42%;
+    --sidebar-background: 0 0% 9%;
+    --sidebar-foreground: 0 0% 80%;
+    --sidebar-primary: 142 82% 56%;
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 0 0% 14%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 0 0% 14%;
+    --sidebar-ring: 142 82% 56%;
   }
 }
 
@@ -234,6 +234,131 @@
     background-image:
       radial-gradient(ellipse 60% 50% at 20% -10%, hsl(var(--primary) / 0.08) 0%, transparent 60%),
       radial-gradient(ellipse 40% 40% at 80% 110%, hsl(160 60% 50% / 0.05) 0%, transparent 60%);
+  }
+
+  /* ── Stitch UI additions ───────────────────────────────────── */
+
+  /* Confidence dot indicators */
+  .confidence-high::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: hsl(142 82% 40%);
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  .dark .confidence-high::before { background: hsl(142 82% 56%); }
+
+  .confidence-medium::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: hsl(38 92% 50%);
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  .confidence-low::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: hsl(0 72% 50%);
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  /* AI badge pill */
+  .badge-ai {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(142 82% 40%);
+    background: hsl(142 82% 40% / 0.1);
+    border: 1px solid hsl(142 82% 40% / 0.25);
+    border-radius: 9999px;
+    padding: 0.2rem 0.65rem;
+    font-family: var(--font-mono);
+  }
+  .dark .badge-ai {
+    color: hsl(142 82% 56%);
+    background: hsl(142 82% 56% / 0.12);
+    border-color: hsl(142 82% 56% / 0.3);
+  }
+  .badge-ai::before {
+    content: "";
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* Project status pills */
+  .status-in-progress {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(142 82% 40%);
+    background: hsl(142 82% 40% / 0.12);
+    border: 1px solid hsl(142 82% 40% / 0.3);
+    border-radius: 9999px;
+    padding: 0.15rem 0.5rem;
+  }
+  .dark .status-in-progress {
+    color: hsl(142 82% 56%);
+    background: hsl(142 82% 56% / 0.14);
+    border-color: hsl(142 82% 56% / 0.35);
+  }
+
+  .status-completed {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(172 60% 40%);
+    background: hsl(172 60% 40% / 0.12);
+    border: 1px solid hsl(172 60% 40% / 0.3);
+    border-radius: 9999px;
+    padding: 0.15rem 0.5rem;
+  }
+
+  .status-delayed {
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(0 72% 50%);
+    background: hsl(0 72% 50% / 0.12);
+    border: 1px solid hsl(0 72% 50% / 0.3);
+    border-radius: 9999px;
+    padding: 0.15rem 0.5rem;
+  }
+
+  /* Metric header card — Report page */
+  .metric-card {
+    border-radius: 1rem;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    padding: 1.25rem;
+  }
+
+  /* Right info panel for 3-column layouts */
+  .right-panel {
+    border-left: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    padding: 1.25rem;
+    border-radius: 0 1rem 1rem 0;
   }
 
   /* Hover lift effect for cards */
