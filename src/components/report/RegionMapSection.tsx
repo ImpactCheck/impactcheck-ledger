@@ -1,24 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
 import { formatTonnes } from "@/contracts/impactcheck.v2";
-
-const REGION_LABELS: Record<string, string> = {
-  texas_ercot: "Texas (ERCOT)",
-  norway_hydro: "Norway (Hydro)",
-  virginia_pjm: "Virginia (PJM)",
-  iowa_miso: "Iowa (MISO)",
-  iceland_geo: "Iceland (Geo)",
-  singapore: "Singapore",
-};
-
-const REGION_COORDS: Record<string, [number, number]> = {
-  texas_ercot: [-97, 31],
-  virginia_pjm: [-77, 38],
-  iowa_miso: [-93, 42],
-  norway_hydro: [10, 60],
-  iceland_geo: [-22, 65],
-  singapore: [103, 1],
-};
+import { REGION_LABELS, REGION_COORDS } from "@/lib/regions";
 
 const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 

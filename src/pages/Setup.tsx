@@ -11,22 +11,19 @@ import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
+// Supported regions for home region and simulation/comparison (carbon footprint + compliance)
 const REGIONS = [
-  { value: "texas_ercot",  label: "Texas (ERCOT — 380 g/kWh)" },
-  { value: "norway_hydro", label: "Norway (Hydro — 10 g/kWh)" },
-  { value: "virginia_pjm", label: "Virginia (PJM — 310 g/kWh)" },
-  { value: "iowa_miso",    label: "Iowa (MISO — 420 g/kWh)" },
-  { value: "iceland_geo",  label: "Iceland (Geothermal — 15 g/kWh)" },
-  { value: "singapore",    label: "Singapore (408 g/kWh)" },
+  { value: "eu",      label: "EU (mixed grid — ~350 g/kWh)" },
+  { value: "norway",  label: "Norway (Hydro — ~10 g/kWh)" },
+  { value: "us",      label: "US (mixed grid — ~380 g/kWh)" },
+  { value: "iceland", label: "Iceland (Geothermal — ~15 g/kWh)" },
 ];
 
 const REGION_CARBON: Record<string, string> = {
-  texas_ercot:  "380 g/kWh — mix of gas, wind",
-  norway_hydro: "10 g/kWh — primarily hydro",
-  virginia_pjm: "310 g/kWh — mixed grid",
-  iowa_miso:    "420 g/kWh — heavy coal/gas",
-  iceland_geo:  "15 g/kWh — geothermal dominant",
-  singapore:    "408 g/kWh — natural gas heavy",
+  eu:      "~350 g/kWh — mixed European grid",
+  norway:  "~10 g/kWh — primarily hydro",
+  us:      "~380 g/kWh — mixed US grid",
+  iceland: "~15 g/kWh — geothermal dominant",
 };
 
 export default function Setup() {
@@ -159,6 +156,9 @@ export default function Setup() {
 
           <div className="space-y-2">
             <Label>Comparison Regions (optional)</Label>
+            <p className="text-xs text-muted-foreground">
+              Simulate carbon impact in other regions or verify compliance if infrastructure were built there.
+            </p>
             <div className="flex flex-wrap gap-2">
               {REGIONS.filter((r) => r.value !== project.primaryRegion).map((r) => (
                 <Badge

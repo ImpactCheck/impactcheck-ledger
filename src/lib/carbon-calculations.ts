@@ -16,12 +16,10 @@ export interface RegionData {
 }
 
 export const REGIONS: RegionData[] = [
-  { name: "texas_ercot", gridIntensity: 380, label: "Texas (ERCOT Grid — 380 g/kWh)" },
-  { name: "norway_hydro", gridIntensity: 10, label: "Norway (Hydro — 10 g/kWh)" },
-  { name: "virginia_pjm", gridIntensity: 310, label: "Virginia (PJM — 310 g/kWh)" },
-  { name: "iowa_miso", gridIntensity: 420, label: "Iowa (MISO — 420 g/kWh)" },
-  { name: "iceland_geo", gridIntensity: 15, label: "Iceland (Geothermal — 15 g/kWh)" },
-  { name: "singapore", gridIntensity: 408, label: "Singapore (Grid — 408 g/kWh)" },
+  { name: "eu", gridIntensity: 350, label: "EU (Mixed grid — ~350 g/kWh)" },
+  { name: "norway", gridIntensity: 10, label: "Norway (Hydro — ~10 g/kWh)" },
+  { name: "us", gridIntensity: 380, label: "US (Mixed grid — ~380 g/kWh)" },
+  { name: "iceland", gridIntensity: 15, label: "Iceland (Geothermal — ~15 g/kWh)" },
 ];
 
 const GPU_EMBODIED_KG = 2274; // kg CO2e per GB200 NVL72 rack
@@ -76,7 +74,7 @@ export const DEFAULT_INPUTS: AuditInputs = {
   lowCarbonConcrete: false,
   powerMW: 500,
   pue: 1.2,
-  region: "texas_ercot",
+  region: "us",
   projectedTokensBillions: 50,
 };
 

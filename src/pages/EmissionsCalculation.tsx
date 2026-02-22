@@ -36,14 +36,7 @@ const CATEGORIES = [
   "CONSTRUCTION", "OPERATIONS", "PROCUREMENT", "OTHER",
 ];
 
-const REGION_LABELS: Record<string, string> = {
-  texas_ercot: "Texas (ERCOT)",
-  norway_hydro: "Norway (Hydro)",
-  virginia_pjm: "Virginia (PJM)",
-  iowa_miso: "Iowa (MISO)",
-  iceland_geo: "Iceland (Geo)",
-  singapore: "Singapore",
-};
+import { REGION_LABELS } from "@/lib/regions";
 
 const CATEGORY_STYLES: Record<string, string> = {
   HARDWARE:     "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",

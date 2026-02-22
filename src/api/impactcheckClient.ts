@@ -6,6 +6,7 @@ import type {
   ActivityEstimate,
   Report,
   Recommendation,
+  RegionComplianceResult,
 } from "@/contracts/impactcheck.v2";
 
 export interface ImpactcheckClient {
@@ -45,6 +46,9 @@ export interface ImpactcheckClient {
 
   // Report
   getReport(projectId: string): Promise<Report>;
+
+  // Compliance (per-region regulatory compliance via Gemini)
+  getCompliance(projectId: string): Promise<{ byRegion: Record<string, RegionComplianceResult> }>;
 
   // Recommendations
   generateRecommendations(projectId: string): Promise<Recommendation[]>;
