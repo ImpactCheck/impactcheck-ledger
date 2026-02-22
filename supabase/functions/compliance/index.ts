@@ -270,7 +270,7 @@ async function evaluateCompliance(
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.05,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 32768,
             responseMimeType: "application/json",
           },
         }),
