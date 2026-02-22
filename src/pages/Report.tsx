@@ -48,16 +48,19 @@ export default function Report() {
       return;
     }
     setLoading(true);
-    Promise.all([
-      api.getReport(projectId),
-      api.generateRecommendations(projectId).catch(() => [] as Recommendation[]),
-    ])
-      .then(([r, recs]) => {
+    setError(null);
+    api
+      .getReport(projectId)
+      .then((r) => {
         setReport(r);
-        setRecommendations(recs);
+        setLoading(false);
+        // Fetch recommendations in background (can take 10–30s due to LLM)
+        api.generateRecommendations(projectId).then(setRecommendations).catch(() => setRecommendations([]));
       })
-      .catch((e) => setError(e.message ?? "Failed to load report"))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        setError(e.message ?? "Failed to load report");
+        setLoading(false);
+      });
   }, [projectId]);
 
   const useCase = project.useCase;

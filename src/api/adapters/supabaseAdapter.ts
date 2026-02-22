@@ -216,23 +216,42 @@ export function createSupabaseAdapter(): ImpactcheckClient {
       const estimates = await this.getEstimates(projectId);
       const activities = await this.getActivities(projectId);
 
-      const regions = [project.primaryRegion, ...(project.comparisonRegions || [])];
+      const regions = [project.primaryRegion, ...(project.comparisonRegions || [])].filter(Boolean);
+      const regionSet = new Set(regions);
+      const primaryRegion = project.primaryRegion || regions[0] || "global";
+
       const totals: Record<string, number> = {};
       const breakdowns: Record<string, { category: string; co2eKg: number }[]> = {};
 
+      // Ensure all project regions have entries (even if 0)
       for (const region of regions) {
-        const regionEstimates = estimates.filter((e) => e.region === region || (!e.region && region === project.primaryRegion));
-        totals[region] = regionEstimates.reduce((s, e) => s + e.co2eKg, 0);
-
-        const byCat: Record<string, number> = {};
-        regionEstimates.forEach((e) => {
-          const cat = e.matchedFactor.name || "Other";
-          byCat[cat] = (byCat[cat] ?? 0) + e.co2eKg;
-        });
-        breakdowns[region] = Object.entries(byCat).map(([category, co2eKg]) => ({ category, co2eKg }));
+        totals[region] = 0;
+        breakdowns[region] = [];
+      }
+      if (regions.length === 0) {
+        totals[primaryRegion] = 0;
+        breakdowns[primaryRegion] = [];
       }
 
-      const primaryTotal = totals[project.primaryRegion] ?? 0;
+      // Aggregate estimates: match by region, or attribute orphans to primary region
+      for (const e of estimates) {
+        const region = (e.region && regionSet.has(e.region)) ? e.region : primaryRegion;
+        totals[region] = (totals[region] ?? 0) + e.co2eKg;
+
+        const cat = (e.matchedFactor?.name && String(e.matchedFactor.name).trim()) || "Other";
+        const existing = breakdowns[region] ?? [];
+        const idx = existing.findIndex((x) => x.category === cat);
+        if (idx >= 0) existing[idx].co2eKg += e.co2eKg;
+        else existing.push({ category: cat, co2eKg: e.co2eKg });
+        breakdowns[region] = existing;
+      }
+
+      // Sort category breakdown by co2eKg descending
+      for (const region of Object.keys(breakdowns)) {
+        breakdowns[region].sort((a, b) => b.co2eKg - a.co2eKg);
+      }
+
+      const primaryTotal = totals[primaryRegion] ?? 0;
       const deltaVsBaselineKg = project.baselineFootprintKgCO2e
         ? primaryTotal - project.baselineFootprintKgCO2e
         : undefined;

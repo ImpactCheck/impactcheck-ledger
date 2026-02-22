@@ -63,7 +63,17 @@ export default function Benchmarking() {
     return Object.keys(report.totalsByRegion)[0] ?? project.primaryRegion ?? "";
   }, [report, project.primaryRegion]);
 
-  const primaryTotal = report?.totalsByRegion?.[primaryRegion] ?? 0;
+  const primaryTotal = useMemo(() => {
+    const fromReport = report?.totalsByRegion?.[primaryRegion] ?? 0;
+    if (fromReport > 0) return fromReport;
+    // Fallback: sum estimates for primary region when report has no totals
+    const pr = project.primaryRegion ?? "";
+    return estimates.reduce(
+      (sum, e) =>
+        sum + (e.region === primaryRegion || (!e.region && primaryRegion === pr) ? e.co2eKg : 0),
+      0
+    );
+  }, [report, primaryRegion, project.primaryRegion, estimates]);
   const renewablePct = RENEWABLE_MIX[primaryRegion] ?? 20;
   const embodiedPct = estimates.length > 0 ? 38 : 0; // industry baseline comparison
 
