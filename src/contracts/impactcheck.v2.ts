@@ -127,6 +127,12 @@ export interface RegionComplianceResult {
   error?: string;
 }
 
+/** Per-region compliance split by time period */
+export interface RegionComplianceByPeriod {
+  year1: RegionComplianceResult;
+  ongoing: RegionComplianceResult;
+}
+
 export interface Report {
   projectId: string;
   totalsByRegion: Record<string, number>;
@@ -140,7 +146,7 @@ export interface Report {
     us: { status: "green" | "yellow" | "red"; reasons: string[] };
     eu: { status: "green" | "yellow" | "red"; reasons: string[] };
     /** Per-region compliance from compliance engine (home + comparison regions) */
-    byRegion?: Record<string, RegionComplianceResult>;
+    byRegion?: Record<string, RegionComplianceByPeriod>;
   };
   hotspots: { text: string; co2eKg: number; phase?: ActivityPhase }[];
 }

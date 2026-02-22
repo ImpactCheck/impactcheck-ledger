@@ -53,7 +53,10 @@ export default function Report() {
         // Load compliance in background (slow Gemini calls)
         api.getCompliance(projectId)
           .then((c) => {
-            setReport(prev => prev ? { ...prev, compliance: { ...prev.compliance, byRegion: c.byRegion } } : prev);
+            setReport(prev => prev ? {
+              ...prev,
+              compliance: { ...prev.compliance, byRegion: c.byRegion }
+            } as ReportType : prev);
           })
           .catch(() => {});
         // Load saved recommendations from DB (no generation)
