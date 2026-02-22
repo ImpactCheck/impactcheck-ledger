@@ -90,15 +90,13 @@ export default function Dashboard() {
       {/* Header */}
       <header className="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
-          <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate("/")}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
+          >
             <img src={logoImg} alt="ImpactCheck" className="h-9 w-9 object-contain" />
-            <div>
-              <span className="text-base font-bold tracking-tight">ImpactCheck</span>
-              <span className="hidden sm:inline text-xs text-muted-foreground ml-2 font-mono">
-                Carbon Audit Platform
-              </span>
-            </div>
-          </div>
+            <span className="text-base font-bold tracking-tight">ImpactCheck</span>
+          </button>
           <div className="flex items-center gap-2">
             <Button
               onClick={handleNewProject}
