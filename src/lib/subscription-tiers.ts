@@ -24,16 +24,18 @@ export const TIERS: Record<SubscriptionTier, TierDefinition> = {
     useCase: "other",
     price: 0,
     reportsPerMonth: 3,
-    uploads: false,
-    pdfExport: false,
+    uploads: true,  // Unlocked for demo
+    pdfExport: true,  // Unlocked for demo
     priceId: null,
     productId: null,
     features: [
       "3 report generates / month",
       "Basic emission mapping",
       "Standard report view",
+      "Document uploads",
+      "PDF report export",
     ],
-    description: "Explore ImpactCheck at no cost",
+    description: "Explore ImpactCheck at no cost (demo: all features unlocked)",
   },
   company: {
     key: "company",
