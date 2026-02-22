@@ -1,11 +1,12 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import { ProjectProvider } from "@/contexts/ProjectContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { ProjectProvider, useProject } from "@/contexts/ProjectContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import Landing from "@/pages/Landing";
 import Auth from "@/pages/Auth";
@@ -21,12 +22,21 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+/** Syncs subscription tier → project useCase */
+function TierSync() {
+  const { subscriptionTier } = useAuth();
+  const { syncTier } = useProject();
+  useEffect(() => { syncTier(subscriptionTier); }, [subscriptionTier]);
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <ThemeProvider>
         <AuthProvider>
           <ProjectProvider>
+            <TierSync />
             <Toaster />
             <Sonner />
             <BrowserRouter>

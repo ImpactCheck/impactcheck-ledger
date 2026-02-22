@@ -45,13 +45,17 @@ serve(async (req) => {
     const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: "active", limit: 1 });
     const hasActiveSub = subscriptions.data.length > 0;
     let subscriptionEnd = null;
+    let productId = null;
 
     if (hasActiveSub) {
-      subscriptionEnd = new Date(subscriptions.data[0].current_period_end * 1000).toISOString();
+      const subscription = subscriptions.data[0];
+      subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
+      productId = subscription.items.data[0]?.price?.product ?? null;
     }
 
     return new Response(JSON.stringify({
       subscribed: hasActiveSub,
+      product_id: productId,
       subscription_end: subscriptionEnd,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
