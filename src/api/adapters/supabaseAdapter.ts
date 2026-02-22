@@ -8,7 +8,7 @@ import type {
   ActivityEstimate,
   Report,
   Recommendation,
-  RegionComplianceResult,
+  RegionComplianceByPeriod,
 } from "@/contracts/impactcheck.v2";
 import { getActivityPhase } from "@/contracts/impactcheck.v2";
 
@@ -30,7 +30,7 @@ async function invokeFunction(name: string, body: Record<string, unknown>) {
   return resp.json();
 }
 
-async function invokeCompliance(projectId: string): Promise<{ byRegion: Record<string, RegionComplianceResult> }> {
+async function invokeCompliance(projectId: string): Promise<{ byRegion: Record<string, RegionComplianceByPeriod> }> {
   try {
     const { byRegion } = await invokeFunction("compliance", { projectId });
     return { byRegion: byRegion || {} };

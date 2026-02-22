@@ -106,6 +106,19 @@ ICELAND — Checks
 "Environmental assessment screening required if wind farm electricity output ≥ 2 MW OR geothermal heating production ≥ 2,500 kW gross power"
 END. OUTPUT JSON ONLY.`;
 
+// Categories considered "embodied" (one-time, year-1 only)
+const EMBODIED_CATEGORIES = [
+  "HARDWARE", "CONSTRUCTION", "PROCUREMENT", "MANUFACTURING",
+  "INFRASTRUCTURE", "EQUIPMENT", "INSTALLATION", "CAPEX", "MATERIAL",
+  "NETWORK_HARDWARE", "COOLING_EQUIPMENT", "ELECTRICAL", "CIVIL",
+];
+
+function isEmbodiedCategory(category: string | null | undefined): boolean {
+  if (!category) return false;
+  const upper = category.toUpperCase();
+  return EMBODIED_CATEGORIES.some((c) => upper.includes(c));
+}
+
 function regionToJurisdiction(region: string): "Norway" | "EU" | "USA" | "Iceland" {
   const r = (region || "").toUpperCase();
   if (r === "NO" || r === "NORWAY") return "Norway";
@@ -113,6 +126,106 @@ function regionToJurisdiction(region: string): "Norway" | "EU" | "USA" | "Icelan
   if (r === "US" || r === "USA") return "USA";
   if (r === "IS" || r === "ICELAND") return "Iceland";
   return "USA";
+}
+
+async function evaluateCompliance(
+  geminiApiKey: string,
+  regionKey: string,
+  periodLabel: string,
+  activities: any[],
+  estimates: any[],
+  allActivities: any[],
+): Promise<Record<string, unknown>> {
+  const totalCo2eKg = estimates.reduce((s: number, e: any) => s + (e.co2e_kg || 0), 0);
+  const totalCo2eTonnes = totalCo2eKg / 1000;
+
+  const activitiesPayload = activities.map((a: any) => ({
+    text: a.text,
+    region: a.region || regionKey,
+    quantity: a.quantity,
+    unit: a.unit,
+    unit_type: a.unit_type,
+    amount: a.amount,
+    currency: a.currency,
+    category: a.category,
+  }));
+
+  const hotspots = [...estimates]
+    .sort((a: any, b: any) => (b.co2e_kg || 0) - (a.co2e_kg || 0))
+    .slice(0, 5)
+    .map((e: any) => {
+      const act = allActivities.find((a: any) => a.id === e.activity_id);
+      return { text: act?.text || "Unknown", co2eKg: e.co2e_kg };
+    });
+
+  const primaryJurisdiction = regionToJurisdiction(regionKey);
+
+  const inputPayload = {
+    region_evaluated: regionKey,
+    period: periodLabel,
+    primary_jurisdiction: primaryJurisdiction,
+    activities: activitiesPayload,
+    impactcheck_outputs: {
+      total_estimated_emissions_kg_co2e: totalCo2eKg,
+      total_estimated_emissions_metric_tons_co2e_per_year: totalCo2eTonnes,
+      note: `Total estimated ${periodLabel} emissions across activities for this region. NOT necessarily facility direct (Scope 1) emissions.`,
+      hotspots,
+      confidence: estimates.length > 0
+        ? estimates.reduce((s: number, e: any) => s + (e.confidence || 0), 0) / estimates.length
+        : 0,
+    },
+    facility_company_stats: {},
+  };
+
+  const prompt = `${COMPLIANCE_PROMPT}\n\nIMPORTANT CONTEXT: This evaluation is for the "${periodLabel}" period.\n- "Year 1" includes both embodied (construction/hardware) and operational emissions.\n- "Following Years" includes only ongoing operational emissions (no embodied).\nConsider the total emissions value accordingly when evaluating thresholds.\n\nINPUTS:\n${JSON.stringify(inputPayload, null, 2)}`;
+
+  const geminiResp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiApiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+      }),
+    }
+  );
+
+  if (!geminiResp.ok) {
+    const errText = await geminiResp.text();
+    console.error(`Gemini compliance error (${periodLabel}):`, errText);
+    return {
+      error: "Compliance evaluation failed",
+      primary_jurisdiction: primaryJurisdiction,
+    };
+  }
+
+  const geminiData = await geminiResp.json();
+  let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+  rawText = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+
+  let parsed: Record<string, unknown> = {};
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    let jsonStr = jsonMatch[0];
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      jsonStr = jsonStr.replace(/,\s*([}\]])/g, "$1");
+      jsonStr = jsonStr.replace(/(?<=:\s*"[^"]*)\n(?=[^"]*")/g, "\\n");
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch (e2) {
+        console.error("Failed to repair JSON:", e2);
+      }
+    }
+  }
+
+  return {
+    ...parsed,
+    totalCo2eKg,
+    totalCo2eTonnes,
+  };
 }
 
 serve(async (req) => {
@@ -154,122 +267,56 @@ serve(async (req) => {
 
     if (regions.length === 0) {
       return new Response(
-        JSON.stringify({
-          byRegion: {},
-          error: "No regions configured",
-        }),
+        JSON.stringify({ byRegion: {}, error: "No regions configured" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // Build a lookup: activityId -> category (for phase classification)
+    const activityMap = new Map<string, any>();
+    for (const a of (activities || [])) {
+      activityMap.set(a.id, a);
+    }
+
     const byRegion: Record<string, unknown> = {};
 
-    for (const regionKey of regions) {
+    // Process all regions in parallel, each with year1 and ongoing evaluations
+    const regionPromises = regions.map(async (regionKey) => {
       const regionEstimates = (estimates || []).filter(
         (e: any) => (e.region || "").toLowerCase() === regionKey.toLowerCase()
       );
-      const totalCo2eKg = regionEstimates.reduce((s: number, e: any) => s + (e.co2e_kg || 0), 0);
-      const totalCo2eTonnes = totalCo2eKg / 1000;
 
-      const activitiesPayload = (activities || []).map((a: any) => ({
-        text: a.text,
-        region: a.region || regionKey,
-        quantity: a.quantity,
-        unit: a.unit,
-        unit_type: a.unit_type,
-        amount: a.amount,
-        currency: a.currency,
-        category: a.category,
-      }));
+      // Split estimates by phase
+      const year1Estimates = regionEstimates; // All estimates (embodied + operational)
+      const ongoingEstimates = regionEstimates.filter((e: any) => {
+        const act = activityMap.get(e.activity_id);
+        return !isEmbodiedCategory(act?.category);
+      });
 
-      const hotspots = [...regionEstimates]
-        .sort((a: any, b: any) => (b.co2e_kg || 0) - (a.co2e_kg || 0))
-        .slice(0, 5)
-        .map((e: any) => {
-          const act = (activities || []).find((a: any) => a.id === e.activity_id);
-          return { text: act?.text || "Unknown", co2eKg: e.co2e_kg };
-        });
-
-      const primaryJurisdiction = regionToJurisdiction(regionKey);
-
-      const inputPayload = {
-        region_evaluated: regionKey,
-        primary_jurisdiction: primaryJurisdiction,
-        activities: activitiesPayload,
-        impactcheck_outputs: {
-          total_estimated_emissions_kg_co2e: totalCo2eKg,
-          total_estimated_emissions_metric_tons_co2e_per_year: totalCo2eTonnes,
-          note: "Total estimated emissions across activities for this region. NOT necessarily facility direct (Scope 1) emissions.",
-          hotspots,
-          confidence: regionEstimates.length > 0
-            ? regionEstimates.reduce((s: number, e: any) => s + (e.confidence || 0), 0) / regionEstimates.length
-            : 0,
-        },
-        facility_company_stats: {},
-      };
-
-      const prompt = `${COMPLIANCE_PROMPT}\n\nINPUTS:\n${JSON.stringify(inputPayload, null, 2)}`;
+      // Activities relevant to each period
+      const allActs = activities || [];
+      const ongoingActivities = allActs.filter((a: any) => !isEmbodiedCategory(a.category));
 
       try {
-        const geminiResp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-            }),
-          }
-        );
-
-        if (!geminiResp.ok) {
-          const errText = await geminiResp.text();
-          console.error("Gemini compliance error:", errText);
-          byRegion[regionKey] = {
-            error: "Compliance evaluation failed",
-            primary_jurisdiction: primaryJurisdiction,
-          };
-          continue;
-        }
-
-        const geminiData = await geminiResp.json();
-        let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-        rawText = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-        // Extract the outermost JSON object robustly
-        let parsed: Record<string, unknown> = {};
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          let jsonStr = jsonMatch[0];
-          // Try parsing; if it fails, attempt to fix common LLM issues
-          try {
-            parsed = JSON.parse(jsonStr);
-          } catch {
-            // Fix trailing commas before } or ]
-            jsonStr = jsonStr.replace(/,\s*([}\]])/g, "$1");
-            // Fix unescaped newlines inside string values
-            jsonStr = jsonStr.replace(/(?<=:\s*"[^"]*)\n(?=[^"]*")/g, "\\n");
-            try {
-              parsed = JSON.parse(jsonStr);
-            } catch (e2) {
-              console.error("Failed to repair JSON:", e2);
-            }
-          }
-        }
+        const [year1Result, ongoingResult] = await Promise.all([
+          evaluateCompliance(GEMINI_API_KEY, regionKey, "Year 1", allActs, year1Estimates, allActs),
+          evaluateCompliance(GEMINI_API_KEY, regionKey, "Following Years", ongoingActivities, ongoingEstimates, allActs),
+        ]);
 
         byRegion[regionKey] = {
-          ...parsed,
-          totalCo2eKg,
-          totalCo2eTonnes,
+          year1: year1Result,
+          ongoing: ongoingResult,
         };
-      } catch (parseErr) {
-        console.error("Compliance parse error for region", regionKey, parseErr);
+      } catch (err) {
+        console.error("Compliance error for region", regionKey, err);
         byRegion[regionKey] = {
-          error: "Failed to parse compliance result",
-          primary_jurisdiction: regionToJurisdiction(regionKey),
+          year1: { error: "Failed to evaluate", primary_jurisdiction: regionToJurisdiction(regionKey) },
+          ongoing: { error: "Failed to evaluate", primary_jurisdiction: regionToJurisdiction(regionKey) },
         };
       }
-    }
+    });
+
+    await Promise.all(regionPromises);
 
     return new Response(JSON.stringify({ byRegion }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
