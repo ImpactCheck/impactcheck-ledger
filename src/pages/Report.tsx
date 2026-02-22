@@ -1,24 +1,33 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertTriangle, Printer, Loader2, Building2, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { api } from "@/api";
 import { useProject } from "@/contexts/ProjectContext";
 import type { Report as ReportType } from "@/contracts/impactcheck.v2";
-import { formatTonnes } from "@/contracts/impactcheck.v2";
+import { formatTonnes, getActivityPhase } from "@/contracts/impactcheck.v2";
 import { ComplianceBadge } from "@/components/ComplianceBadge";
 import { AuditCertificate } from "@/components/AuditCertificate";
+import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-const CATEGORY_COLORS = [
-  "hsl(152 52% 40%)",
-  "hsl(200 70% 50%)",
-  "hsl(30 80% 55%)",
-  "hsl(280 60% 55%)",
-  "hsl(350 70% 55%)",
-  "hsl(60 70% 45%)",
-];
+const EMBODIED_COLOR = "hsl(30 80% 55%)";
+const OPERATIONAL_COLOR = "hsl(200 70% 50%)";
+
+const CATEGORY_COLORS: Record<string, string> = {};
+function getCategoryColor(category: string): string {
+  const phase = getActivityPhase(category);
+  if (!CATEGORY_COLORS[category]) {
+    // Assign a shade based on phase
+    const embodiedPalette = ["hsl(30 80% 55%)", "hsl(35 75% 50%)", "hsl(25 70% 45%)", "hsl(40 65% 60%)"];
+    const operationalPalette = ["hsl(200 70% 50%)", "hsl(210 65% 55%)", "hsl(190 60% 45%)", "hsl(180 55% 50%)", "hsl(220 60% 55%)"];
+    const palette = phase === "embodied" ? embodiedPalette : operationalPalette;
+    const existing = Object.keys(CATEGORY_COLORS).filter(k => getActivityPhase(k) === phase).length;
+    CATEGORY_COLORS[category] = palette[existing % palette.length];
+  }
+  return CATEGORY_COLORS[category];
+}
 
 export default function Report() {
   const navigate = useNavigate();
@@ -40,6 +49,20 @@ export default function Report() {
       .catch((e) => setError(e.message ?? "Failed to load report"))
       .finally(() => setLoading(false));
   }, [projectId]);
+
+  // Derive embodied/operational totals from category breakdown
+  const phaseTotals = useMemo(() => {
+    if (!report?.categoryBreakdownByRegion) return null;
+    const primaryRegion = Object.keys(report.totalsByRegion)[0] ?? "";
+    const categories = report.categoryBreakdownByRegion[primaryRegion] ?? [];
+    let embodied = 0;
+    let operational = 0;
+    for (const c of categories) {
+      if (getActivityPhase(c.category) === "embodied") embodied += c.co2eKg;
+      else operational += c.co2eKg;
+    }
+    return { embodied, operational };
+  }, [report]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -118,6 +141,44 @@ export default function Report() {
         </CardContent>
       </Card>
 
+      {/* Embodied vs Operational split */}
+      {phaseTotals && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="card-elevated border-0 print:border print:shadow-none">
+            <CardContent className="pt-5 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "hsl(30 80% 55% / 0.15)" }}>
+                  <Building2 className="h-5 w-5" style={{ color: EMBODIED_COLOR }} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Embodied Carbon</p>
+                  <p className="text-2xl font-bold font-mono">
+                    {formatTonnes(phaseTotals.embodied)} <span className="text-sm font-normal text-muted-foreground">t CO₂e</span>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">One-time · construction & hardware</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="card-elevated border-0 print:border print:shadow-none">
+            <CardContent className="pt-5 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "hsl(200 70% 50% / 0.15)" }}>
+                  <Zap className="h-5 w-5" style={{ color: OPERATIONAL_COLOR }} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Operational Carbon</p>
+                  <p className="text-2xl font-bold font-mono">
+                    {formatTonnes(phaseTotals.operational)} <span className="text-sm font-normal text-muted-foreground">t CO₂e</span>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Per year · energy & operations</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Compliance detail */}
       <Card className="card-elevated border-0 print:border print:shadow-none">
         <CardHeader>
@@ -167,10 +228,21 @@ export default function Report() {
                     formatter={(value: number) => [`${formatTonnes(value)} t CO₂e`, ""]}
                   />
                   <Bar dataKey="co2eKg" radius={[6, 6, 0, 0]}>
-                    {categories.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
+                    {categories.map((c, i) => <Cell key={i} fill={getCategoryColor(c.category)} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+            {/* Legend */}
+            <div className="flex items-center gap-4 mt-3 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: EMBODIED_COLOR }} />
+                Embodied
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: OPERATIONAL_COLOR }} />
+                Operational
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -217,6 +289,17 @@ export default function Report() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground font-mono w-5">{i + 1}.</span>
                   <span className="font-medium">{h.text}</span>
+                  {h.phase && (
+                    <Badge
+                      className={`text-[10px] rounded-full ${
+                        h.phase === "embodied"
+                          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                          : "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 border-sky-200 dark:border-sky-800"
+                      }`}
+                    >
+                      {h.phase === "embodied" ? "Embodied" : "Operational"}
+                    </Badge>
+                  )}
                 </div>
                 <span className="font-mono font-bold text-primary">{formatTonnes(h.co2eKg)} t</span>
               </div>

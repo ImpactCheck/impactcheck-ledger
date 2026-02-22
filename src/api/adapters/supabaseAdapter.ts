@@ -9,6 +9,7 @@ import type {
   Report,
   Recommendation,
 } from "@/contracts/impactcheck.v2";
+import { getActivityPhase } from "@/contracts/impactcheck.v2";
 
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
@@ -221,7 +222,7 @@ export function createSupabaseAdapter(): ImpactcheckClient {
       const sorted = [...estimates].sort((a, b) => b.co2eKg - a.co2eKg);
       const hotspots = sorted.slice(0, 5).map((e) => {
         const act = activities.find((a) => a.id === e.activityId);
-        return { text: act?.text ?? e.activityId, co2eKg: e.co2eKg };
+        return { text: act?.text ?? e.activityId, co2eKg: e.co2eKg, phase: getActivityPhase(act?.category) };
       });
 
       return {
@@ -318,6 +319,7 @@ function mapActivity(d: any): ExtractedActivity {
     currency: d.currency,
     sourceDocumentId: d.source_document_id,
     note: d.note,
+    category: d.category ?? undefined,
   };
 }
 
