@@ -132,17 +132,52 @@ async function runRecommendations(
       message: "Generating reduction strategies with AI…",
     }).eq("id", jobId);
 
-    const prompt = `You are a carbon reduction strategy consultant. Based on the following emission hotspots for a ${project?.company_type || "general"} project in ${project?.primary_region || "unknown region"}, generate 3-5 actionable reduction recommendations.
+    const companyType = project?.company_type || "business";
+    const region = project?.primary_region || "unknown region";
+
+    let roleContext = "";
+    let outputGuidance = "";
+
+    if (companyType === "investor") {
+      roleContext = `You are a carbon investment analyst advising venture capital and institutional investors. Your focus is on long-term feasibility, cost-to-carbon ROI, and financial risks from non-compliance (e.g. carbon taxes, fines, stranded assets).`;
+      outputGuidance = `For each recommendation:
+- Emphasize cost/carbon impact and ROI projections
+- If the project is not compliant, estimate potential fees, penalties, or carbon taxes the company would face
+- Assess long-term investment feasibility given the carbon profile
+- Highlight risks that could affect portfolio value
+- Frame recommendations in terms of financial returns alongside emission reductions`;
+    } else if (companyType === "regulator") {
+      roleContext = `You are a regulatory compliance advisor specializing in environmental policy (CSRD, EU ETS, EPA regulations). Your focus is on helping projects achieve and maintain long-term regulatory compliance.`;
+      outputGuidance = `For each recommendation:
+- If the project is already compliant, recommend strategies to maintain compliance long-term as regulations tighten
+- If not compliant, provide a clear roadmap to achieve compliance with specific milestones
+- Reference relevant regulatory frameworks (CSRD, EU ETS, national carbon budgets)
+- Estimate timeline and effort for each compliance improvement
+- Highlight evidence gaps that could be flagged during audits`;
+    } else {
+      roleContext = `You are a carbon reduction strategy consultant. Your focus is on actionable emission reduction strategies with practical implementation guidance.`;
+      outputGuidance = `For each recommendation:
+- Provide concrete, actionable steps the company can take
+- Estimate the emission reduction potential
+- Consider operational constraints and implementation feasibility
+- Prioritize highest-impact changes`;
+    }
+
+    const prompt = `${roleContext}
+
+Based on the following emission hotspots for a project in ${region}, generate 3-5 targeted recommendations.
 
 Hotspots:
 ${hotspotSummary}
+
+${outputGuidance}
 
 For each recommendation return a JSON array with:
 - title: short title
 - summary: 1-2 sentence description
 - expectedDeltaKg: negative number representing expected reduction in kg CO₂e
 - constraints: array of constraint strings
-- strategyDraftText: detailed strategy text (2-3 sentences)
+- strategyDraftText: detailed strategy text (3-5 sentences)
 
 Return ONLY valid JSON array, no markdown fences.`;
 

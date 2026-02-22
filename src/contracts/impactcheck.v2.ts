@@ -2,7 +2,7 @@
 
 export type RegionCode = string;
 
-export type CompanyType = "ai_infra" | "other";
+export type CompanyType = "business" | "investor" | "regulator";
 
 export type UnitType = "Weight" | "Energy" | "Power" | "Volume" | "Area" | "Distance" | "Money" | "Number" | "Data" | "Time" | "WeightOverDistance" | "ContainerOverDistance" | "PassengerOverDistance" | "AreaOverTime" | "DataOverTime" | "DistanceOverTime" | "NumberOverTime" | "WeightOverTime";
 

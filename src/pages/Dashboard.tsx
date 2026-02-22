@@ -71,7 +71,7 @@ export default function Dashboard() {
     navigate("/setup");
   };
 
-  const aiInfraCount = projects.filter((p) => p.companyType === "ai_infra").length;
+  const businessCount = projects.filter((p) => p.companyType === "business").length;
   const regionCount = new Set(
     projects.flatMap((p) => [p.primaryRegion, ...(p.comparisonRegions ?? [])])
   ).size;
@@ -183,14 +183,14 @@ export default function Dashboard() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
-                      AI Infrastructure
+                      Business
                     </p>
                     <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
                       <Building2 className="h-4 w-4 text-primary" />
                     </div>
                   </div>
-                  <p className="text-4xl font-bold font-mono">{aiInfraCount}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">AI projects</p>
+                  <p className="text-4xl font-bold font-mono">{businessCount}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">Business projects</p>
                 </CardContent>
               </Card>
 
@@ -254,7 +254,7 @@ function ProjectCard({
   onDelete: (e: React.MouseEvent, id: string) => void;
 }) {
   const regionLabel = REGION_LABELS[proj.primaryRegion] ?? proj.primaryRegion?.replace(/_/g, " ") ?? "—";
-  const isAiInfra = proj.companyType === "ai_infra";
+  const typeLabel = { business: "Business", investor: "Investor", regulator: "Regulator" }[proj.companyType] ?? proj.companyType;
   const isCompleted = !!proj.baselineFootprintKgCO2e;
   const progressPct = isCompleted ? 100 : 35; // Simple heuristic
 
@@ -274,16 +274,9 @@ function ProjectCard({
               <span className={isCompleted ? "status-completed" : "status-in-progress"}>
                 {isCompleted ? "COMPLETED" : "IN PROGRESS"}
               </span>
-              <div
-                className={cn(
-                  "flex items-center gap-1 text-[10px] rounded-full px-2 py-0.5 font-medium",
-                  isAiInfra
-                    ? "bg-primary/10 text-primary"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {isAiInfra ? <Sparkles className="h-2.5 w-2.5" /> : <Building2 className="h-2.5 w-2.5" />}
-                {isAiInfra ? "AI Infra" : "Enterprise"}
+              <div className="flex items-center gap-1 text-[10px] rounded-full px-2 py-0.5 font-medium bg-primary/10 text-primary">
+                <Building2 className="h-2.5 w-2.5" />
+                {typeLabel}
               </div>
             </div>
             <h3 className="font-semibold text-[15px] truncate group-hover:text-primary transition-colors">
