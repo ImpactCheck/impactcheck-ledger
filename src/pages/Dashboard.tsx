@@ -21,22 +21,17 @@ import { cn } from "@/lib/utils";
 
 import { REGION_LABELS } from "@/lib/regions";
 
-const SAMPLE_CSV = `Item,Description,Quantity,Unit,Unit Cost (USD),Total Cost (USD)
-1,NVIDIA GB200 NVL72 rack – manufacturing & delivery,256,racks,320000,81920000
-2,Liquid cooling distribution units (CDUs),64,units,45000,2880000
-3,Standard concrete – foundation pouring,12000,MT,125,1500000
-4,Steel rebar – structural fabrication,3200,MT,950,3040000
-5,Diesel generators – backup power (annual fuel),500,MWh,210,105000
-6,Grid electricity – operational Year 1,4380000,MWh,0.065,284700000
-7,Transformer & switchgear manufacturing,480,MT,8500,4080000
-8,Fiber optic cabling – installation,120,km,18000,2160000
-9,HVAC ductwork & piping – fabrication,950,MT,3200,3040000
-10,Server-room fire suppression system,1,system,750000,750000
-11,UPS battery bank – manufacturing,340,MT,12000,4080000
-12,Employee commute – construction phase (12 months),1200,person-months,150,180000
-13,Water usage – cooling towers Year 1,8500000,liters,0.004,34000
-14,Refrigerant top-up (R-134a),2.5,MT,15000,37500
-15,IT equipment packaging & logistics,3200,pallets,85,272000`;
+const SAMPLE_CSV = `Item,Description,Quantity,Unit,Category,Notes
+1,Structural Steel (Nordic Green Steel),3200,metric tons,Construction,Regional Nordic supplier
+2,Low-Carbon Concrete (Foundation Mix),9500,cubic yards,Construction,Foundation works
+3,Copper Cabling & Busbars,240,metric tons,Infrastructure,Electrical distribution
+4,DLC Polymer Piping (PVC-free),22000,linear meters,Infrastructure,Direct-to-chip liquid cooling
+5,NVIDIA GB200 Blackwell Racks (NVL72),42,racks,Hardware,"3,024 GPUs total"
+6,Mechanical Skids & Heat Exchangers (1MW),12,units,Hardware,Cooling skids
+7,Facility Electricity – Grid Draw (Year 1),111400,MWh,Energy,100% Norwegian hydroelectric grid
+8,Generator Testing Fuel (HVO100 Renewable Diesel),15000,liters,Energy,Annual backup generator testing
+9,Facility Cooling Water – Closed Loop DLC (Year 1),5250000,liters,Water,Closed-loop system
+10,Surplus Thermal Energy Export to District Heating,88000,MWh,Energy Recovery,Recovered heat to Hamar district network`;
 
 function downloadSampleCsv() {
   const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
