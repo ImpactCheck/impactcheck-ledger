@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Plus, MapPin, Calendar, Building2, ArrowRight, Sun, Moon,
-  Trash2, BarChart2, Globe, Leaf, Sparkles, Users,
+  Trash2, BarChart2, Globe, Leaf, Sparkles, Users, Download, FileSpreadsheet,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -20,6 +20,33 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 import { REGION_LABELS } from "@/lib/regions";
+
+const SAMPLE_CSV = `Item,Description,Quantity,Unit,Unit Cost (USD),Total Cost (USD)
+1,NVIDIA GB200 NVL72 rack – manufacturing & delivery,256,racks,320000,81920000
+2,Liquid cooling distribution units (CDUs),64,units,45000,2880000
+3,Standard concrete – foundation pouring,12000,MT,125,1500000
+4,Steel rebar – structural fabrication,3200,MT,950,3040000
+5,Diesel generators – backup power (annual fuel),500,MWh,210,105000
+6,Grid electricity – operational Year 1,4380000,MWh,0.065,284700000
+7,Transformer & switchgear manufacturing,480,MT,8500,4080000
+8,Fiber optic cabling – installation,120,km,18000,2160000
+9,HVAC ductwork & piping – fabrication,950,MT,3200,3040000
+10,Server-room fire suppression system,1,system,750000,750000
+11,UPS battery bank – manufacturing,340,MT,12000,4080000
+12,Employee commute – construction phase (12 months),1200,person-months,150,180000
+13,Water usage – cooling towers Year 1,8500000,liters,0.004,34000
+14,Refrigerant top-up (R-134a),2.5,MT,15000,37500
+15,IT equipment packaging & logistics,3200,pallets,85,272000`;
+
+function downloadSampleCsv() {
+  const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "impactcheck_sample_data.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -137,6 +164,36 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground mt-4">
               Supports CSV, XLSX, JSON, and PDF documents
             </p>
+
+            {/* ── Sample data card ────────────────────────────── */}
+            <Card className="card-elevated border-0 rounded-3xl mt-10 w-full max-w-md text-left">
+              <CardContent className="p-5">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <FileSpreadsheet className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm mb-1">Want to try it out first?</h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                      Download our sample dataset — a fictional data center procurement list — then
+                      drop it into the engine to see how ImpactCheck extracts activities and
+                      calculates carbon emissions.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 rounded-xl h-8 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadSampleCsv();
+                      }}
+                    >
+                      <Download className="h-3.5 w-3.5" /> Download Sample CSV
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         ) : (
           <>
