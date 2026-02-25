@@ -53,6 +53,7 @@ export function createSupabaseAdapter(): ImpactcheckClient {
   return {
     // ─── Projects ──────────────────────────────────────────
     async createProject(params) {
+      const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("projects")
         .insert({
@@ -61,7 +62,8 @@ export function createSupabaseAdapter(): ImpactcheckClient {
           company_type: params.companyType,
           primary_region: params.primaryRegion,
           comparison_regions: params.comparisonRegions || [],
-        })
+          user_id: user?.id,
+        } as any)
         .select()
         .single();
       if (error) throw error;
