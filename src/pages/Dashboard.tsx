@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
 import type { Project } from "@/contracts/impactcheck.v2";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +26,7 @@ import { REGION_LABELS } from "@/lib/regions";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { updateProject } = useProject();
   const { theme, toggleTheme } = useTheme();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -269,6 +271,40 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* ── Getting started hint (anonymous / demo users) ── */}
+            {!user && (
+              <Card className="card-elevated border-0 rounded-3xl mt-8">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <FileSpreadsheet className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm mb-1">Run your own audit</h3>
+                      <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                        Create a new project and upload your own data — or use our sample input
+                        document to walk through the full workflow yourself. You can also explore one
+                        of the example projects above to see pre-populated results.
+                      </p>
+                      <a
+                        href="/sample/Crusoe_Polar_Hamar_ImpactCheck_Sample.pdf"
+                        download
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 rounded-xl h-8 text-xs"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Download Sample PDF
+                        </Button>
+                      </a>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </main>
