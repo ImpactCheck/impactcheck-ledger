@@ -21,27 +21,7 @@ import { cn } from "@/lib/utils";
 
 import { REGION_LABELS } from "@/lib/regions";
 
-const SAMPLE_CSV = `Item,Description,Quantity,Unit,Category,Notes
-1,Structural Steel (Nordic Green Steel),3200,metric tons,Construction,Regional Nordic supplier
-2,Low-Carbon Concrete (Foundation Mix),9500,cubic yards,Construction,Foundation works
-3,Copper Cabling & Busbars,240,metric tons,Infrastructure,Electrical distribution
-4,DLC Polymer Piping (PVC-free),22000,linear meters,Infrastructure,Direct-to-chip liquid cooling
-5,NVIDIA GB200 Blackwell Racks (NVL72),42,racks,Hardware,"3,024 GPUs total"
-6,Mechanical Skids & Heat Exchangers (1MW),12,units,Hardware,Cooling skids
-7,Facility Electricity – Grid Draw (Year 1),111400,MWh,Energy,100% Norwegian hydroelectric grid
-8,Generator Testing Fuel (HVO100 Renewable Diesel),15000,liters,Energy,Annual backup generator testing
-9,Facility Cooling Water – Closed Loop DLC (Year 1),5250000,liters,Water,Closed-loop system
-10,Surplus Thermal Energy Export to District Heating,88000,MWh,Energy Recovery,Recovered heat to Hamar district network`;
 
-function downloadSampleCsv() {
-  const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "impactcheck_sample_data.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -170,21 +150,23 @@ export default function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-sm mb-1">Want to try it out first?</h3>
                     <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                      Download our sample dataset — a fictional data center procurement list — then
-                      drop it into the engine to see how ImpactCheck extracts activities and
-                      calculates carbon emissions.
+                      Download our sample input document — a pre-construction resource &amp; energy
+                      estimate for a Nordic AI data center — then upload it to see how ImpactCheck
+                      extracts activities and calculates carbon emissions.
                     </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 rounded-xl h-8 text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadSampleCsv();
-                      }}
+                    <a
+                      href="/sample/Crusoe_Polar_Hamar_ImpactCheck_Sample.pdf"
+                      download
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <Download className="h-3.5 w-3.5" /> Download Sample CSV
-                    </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 rounded-xl h-8 text-xs"
+                      >
+                        <Download className="h-3.5 w-3.5" /> Download Sample PDF
+                      </Button>
+                    </a>
                   </div>
                 </div>
               </CardContent>
