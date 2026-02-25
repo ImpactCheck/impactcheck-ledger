@@ -300,6 +300,7 @@ export type Database = {
           name: string
           primary_region: string
           updated_at: string
+          user_id: string | null
           year: number
         }
         Insert: {
@@ -311,6 +312,7 @@ export type Database = {
           name: string
           primary_region?: string
           updated_at?: string
+          user_id?: string | null
           year?: number
         }
         Update: {
@@ -322,6 +324,7 @@ export type Database = {
           name?: string
           primary_region?: string
           updated_at?: string
+          user_id?: string | null
           year?: number
         }
         Relationships: []
