@@ -68,8 +68,8 @@ Additional guidelines:
 - Be honest about confidence: "high" if specific quantity + unit given, \
 "medium" if estimated from context, "low" if purely assumed.
 
-Respond with ONLY a JSON object (no markdown fences, no explanation):
-{{"co2e_kg": <number>, "confidence": "high|medium|low", "rationale": "<one sentence>"}}"""
+Respond with ONLY a JSON object, no markdown, no explanation, keep it short:
+{{"co2e_kg": <number>, "confidence": "high|medium|low"}}"""
 
 
 def estimate_co2e_with_gemini(
