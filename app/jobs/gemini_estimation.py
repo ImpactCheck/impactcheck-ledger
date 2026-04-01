@@ -19,9 +19,9 @@ GEMINI_ESTIMATION_URL = (
 )
 
 _ESTIMATION_PROMPT = """\
-You are a carbon footprint expert specialising in AI data-center infrastructure.
-Estimate the TOTAL annual CO2e emissions in kilograms (kg CO2 equivalent) for the \
-activity described below.
+You are a carbon footprint expert with broad knowledge across all industries and \
+activity types. Estimate the TOTAL CO2e emissions in kilograms (kg CO2 equivalent) \
+for the activity described below.
 {doc_context_line}
 Activity: {activity_text}
 Quantity: {quantity_str}
@@ -29,38 +29,44 @@ Quantity: {quantity_str}
 
 CRITICAL — NEVER RETURN ZERO:
 - You MUST provide a positive CO2e estimate. Zero is NEVER acceptable.
-- Every physical activity has a carbon footprint. Use industry benchmarks, typical \
-values, or conservative engineering estimates when exact data is unavailable.
-- If the Climatiq API had no matching factor or rejected the unit type, you are the \
-fallback: produce a defensible best-effort estimate.
+- Every physical activity has a carbon footprint. Use IPCC, GHG Protocol, or \
+industry benchmark values when exact data is unavailable.
+- You are the fallback when Climatiq had no matching factor — produce a \
+defensible best-effort estimate.
 
-IMPORTANT — ANNUALISATION RULES:
-- Your answer must represent a FULL YEAR of impact (12 months).
-- EMBODIED (one-time capital items): divide lifetime emissions by the asset lifetime.
-  • GPU / AI accelerator (H100, A100, GB200): ~1,500 kgCO2e embodied per unit; \
-assume 5-year lifetime → 300 kgCO2e/unit/year.
-  • Standard server / rack server: ~1,000 kgCO2e; 5-year → 200 kgCO2e/unit/year.
-  • Networking switch/router: ~200 kgCO2e; 5-year → 40 kgCO2e/unit/year.
-  • UPS / PDU / power equipment: ~500 kgCO2e; 10-year → 50 kgCO2e/unit/year.
-  • Data-center construction: ~500 kgCO2e/m²; 25-year → 20 kgCO2e/m²/year.
-  • Cooling unit (CRAC/CRAH): ~2,000 kgCO2e; 15-year → 133 kgCO2e/unit/year.
-- OPERATIONAL (recurring): scale raw quantity to a full year if needed.
-  • Electricity: use grid intensity by region:
-      texas_ercot ~0.39, virginia_pjm ~0.32, iowa_miso ~0.43,
-      norway_hydro ~0.02, iceland_geo ~0.03, singapore ~0.41,
-      global average ~0.45 kgCO2e/kWh.
-    If the quantity is in kW (power), multiply by 8,760 h/year first.
-  • Diesel / HVO fuel: 2.68 kgCO2e/litre; scale monthly → ×12 or daily → ×365.
-  • Natural gas: 2.04 kgCO2e/m³.
-  • Water (cooling towers): 0.0003 kgCO2e/litre.
-  • Cloud / data-transfer fees: use ~0.008 kgCO2e/GB transferred.
+EMISSION FACTOR BENCHMARKS (use these for direct calculations):
+TRANSPORT (use directly with quantity if unit_type is WeightOverDistance or PassengerOverDistance):
+  • Air freight (belly/cargo): 0.60 kgCO2e per tonne-km
+  • Air freight (freighter): 0.80 kgCO2e per tonne-km
+  • Road freight (HGV/truck): 0.10 kgCO2e per tonne-km
+  • Rail freight (electric): 0.028 kgCO2e per tonne-km
+  • Rail freight (diesel): 0.06 kgCO2e per tonne-km
+  • Sea freight (container): 0.015 kgCO2e per tonne-km
+  • Passenger flight (short-haul <3h): 0.18 kgCO2e per passenger-km
+  • Passenger flight (long-haul >6h): 0.14 kgCO2e per passenger-km
+  • Car (average): 0.17 kgCO2e per passenger-km
+
+ENERGY:
+  • Electricity (global average): 0.45 kgCO2e/kWh; Sweden: 0.02 kgCO2e/kWh
+  • Natural gas: 2.04 kgCO2e/m³; Diesel: 2.68 kgCO2e/litre
+
+MATERIALS (per tonne):
+  • Steel: 1,800 kgCO2e/t; Concrete: 130 kgCO2e/t; Cement: 900 kgCO2e/t
+  • Aluminium: 8,000 kgCO2e/t; Copper: 3,500 kgCO2e/t
+
+HARDWARE (embodied, per unit):
+  • GPU server (H100/A100): ~1,500 kgCO2e; Standard server: ~1,000 kgCO2e
+  • Cooling unit: ~2,000 kgCO2e; UPS/PDU: ~500 kgCO2e
+
+IMPORTANT: If unit_type is WeightOverDistance (tonne-km) multiply directly by the \
+relevant transport factor above. Do NOT annualise transport — it is already a \
+one-time or period total.
 
 Additional guidelines:
-- If quantity is unknown, search the document context above for the relevant quantity; \
-if not found use a conservative representative amount for a mid-size AI data center.
-- ABSOLUTELY NEVER return 0. Every activity has carbon impact — always provide a \
-positive best-effort estimate using industry benchmarks or typical values.
-- Be honest about confidence: "high" only if a specific quantity and unit are given.
+- If quantity is unknown, use a conservative representative amount.
+- ABSOLUTELY NEVER return 0.
+- Be honest about confidence: "high" if specific quantity + unit given, \
+"medium" if estimated from context, "low" if purely assumed.
 
 Respond with ONLY a JSON object (no markdown fences, no explanation):
 {{"co2e_kg": <number>, "confidence": "high|medium|low", "rationale": "<one sentence>"}}"""
