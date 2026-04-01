@@ -121,7 +121,7 @@ def estimate_co2e_with_gemini(
         "contents": [{"parts": content_parts}],
         "generationConfig": {
             "temperature": 0.4,
-            "maxOutputTokens": 512,
+            "maxOutputTokens": 1024,
         },
     }).encode()
 
