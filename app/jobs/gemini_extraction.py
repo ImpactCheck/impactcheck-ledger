@@ -9,6 +9,7 @@ import base64
 import json
 import logging
 import re
+import uuid
 from pathlib import Path
 
 import httpx
@@ -487,7 +488,7 @@ async def extract_with_gemini(
 
             activities.append(
                 ExtractedActivity(
-                    id=f"act_{idx + 1:04d}",
+                    id=str(uuid.uuid4()),
                     projectId=project.id,
                     text=sq or "Unknown activity",
                     search_query=sq or None,
