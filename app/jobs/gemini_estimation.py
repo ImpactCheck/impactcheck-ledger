@@ -120,9 +120,8 @@ def estimate_co2e_with_gemini(
     body = json.dumps({
         "contents": [{"parts": content_parts}],
         "generationConfig": {
-            "temperature": 0.1,
+            "temperature": 0.4,
             "maxOutputTokens": 512,
-            "response_mime_type": "application/json",
         },
     }).encode()
 
